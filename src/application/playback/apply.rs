@@ -435,6 +435,12 @@ async fn persist_wallpaper_assignment(
         app.settings
             .set_canvas_wallpaper(canvas_id, Some(wallpaper_id.clone()))?;
     }
+    // `DisplayInfo.wallpaper_id` is derived from the persistent assignment.
+    // The router's assignment event is emitted before this function writes
+    // settings, so publish a fresh snapshot once the new value is available.
+    let displays = app.router.snapshot_displays().await;
+    app.router
+        .emit_displays_replace_for_settings_change(displays);
     if !canvas_ids.is_empty() {
         app.router.publish_canvas_snapshot().await;
     }

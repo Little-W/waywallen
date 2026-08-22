@@ -435,6 +435,33 @@
         <source>Rotation</source>
         <translation>Поворот</translation>
     </message>
+    <message>
+        <source>Current wallpaper</source>
+        <translation>Текущие обои</translation>
+    </message>
+    <message>
+        <source>Wallpaper settings</source>
+        <translation>Настройки обоев</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>Загрузка…</translation>
+    </message>
+    <message>
+        <source>Untitled</source>
+        <translation>Без названия</translation>
+    </message>
+    <message>
+        <source>No wallpaper assigned</source>
+        <translation>Обои не назначены</translation>
+    </message>
+</context>
+<context>
+    <name>WallpaperSettingsPage</name>
+    <message>
+        <source>Wallpaper settings</source>
+        <translation>Настройки обоев</translation>
+    </message>
 </context>
 <context>
     <name>EmptyFilter</name>

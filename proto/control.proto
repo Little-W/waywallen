@@ -805,6 +805,9 @@ message DisplayInfo {
   CanvasRect canvas_rect = 18;
   uint32 canvas_overlap_count = 19;
   bool selectable_target = 20;
+  // Wallpaper currently configured for this display or its canvas. Empty when
+  // no assignment has been stored.
+  string wallpaper_id = 21;
 }
 
 message CanvasRect {

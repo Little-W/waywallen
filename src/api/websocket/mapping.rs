@@ -343,6 +343,7 @@ pub(super) fn display_snapshot_to_pb(
         canvas_rect: s.canvas_rect.map(canvas_rect_to_pb),
         canvas_overlap_count: s.canvas_overlap_count,
         selectable_target: s.selectable_target,
+        wallpaper_id: s.wallpaper_id.unwrap_or_default(),
     }
 }
 

@@ -371,6 +371,10 @@ pub struct DisplaySnapshot {
     pub canvas_rect: Option<CanvasRect>,
     pub canvas_overlap_count: u32,
     pub selectable_target: bool,
+    /// Wallpaper configured for this display. Canvas members take their
+    /// assignment from the canvas; independent displays use their persistent
+    /// per-display assignment.
+    pub wallpaper_id: Option<String>,
     pub conditions: Vec<RuntimeCondition>,
 }
 
@@ -2756,6 +2760,15 @@ impl Router {
         let settings_key = Self::settings_key_for(&s.info).to_string();
         let canvas = self.canvas_for_info(&s.info);
         let canvas_id = canvas.as_ref().map(|(id, _)| id.clone());
+        let wallpaper_id = canvas
+            .as_ref()
+            .and_then(|(_, canvas)| canvas.last_wallpaper.clone())
+            .or_else(|| {
+                self.settings
+                    .get()
+                    .and_then(|settings| settings.display_prefs(&settings_key))
+                    .and_then(|prefs| prefs.last_wallpaper)
+            });
         let canvas_rect = canvas
             .as_ref()
             .and_then(|(_, canvas)| canvas.members.get(&settings_key).map(|member| member.rect));
@@ -2810,6 +2823,7 @@ impl Router {
             canvas_rect,
             canvas_overlap_count,
             selectable_target,
+            wallpaper_id,
             conditions: inner
                 .display_conditions
                 .get(&id)
@@ -2900,6 +2914,15 @@ impl Router {
                 let settings_key = Self::settings_key_for(&s.info).to_string();
                 let canvas = self.canvas_for_info(&s.info);
                 let canvas_id = canvas.as_ref().map(|(id, _)| id.clone());
+                let wallpaper_id = canvas
+                    .as_ref()
+                    .and_then(|(_, canvas)| canvas.last_wallpaper.clone())
+                    .or_else(|| {
+                        self.settings
+                            .get()
+                            .and_then(|settings| settings.display_prefs(&settings_key))
+                            .and_then(|prefs| prefs.last_wallpaper)
+                    });
                 let canvas_rect = canvas.as_ref().and_then(|(_, canvas)| {
                     canvas.members.get(&settings_key).map(|member| member.rect)
                 });
@@ -2955,6 +2978,7 @@ impl Router {
                     canvas_rect,
                     canvas_overlap_count,
                     selectable_target,
+                    wallpaper_id,
                     conditions: inner
                         .display_conditions
                         .get(&id)
@@ -4319,11 +4343,10 @@ mod tests {
 
         let b = router.register_display(reg_iid("Right", "display-b")).await;
         let a = router.register_display(reg_iid("Left", "display-a")).await;
-        let by_id = router
-            .snapshot_displays()
-            .await
-            .into_iter()
-            .map(|display| (display.id, display.settings_key))
+        let snapshots = router.snapshot_displays().await;
+        let by_id = snapshots
+            .iter()
+            .map(|display| (display.id, display.settings_key.clone()))
             .collect::<HashMap<_, _>>();
 
         assert_eq!(
@@ -4332,6 +4355,20 @@ mod tests {
         );
         assert_eq!(
             settings.resolved_last_wallpaper(&by_id[&b.id]).as_deref(),
+            Some("wallpaper-b")
+        );
+        assert_eq!(
+            snapshots
+                .iter()
+                .find(|display| display.id == a.id)
+                .and_then(|display| display.wallpaper_id.as_deref()),
+            Some("wallpaper-a")
+        );
+        assert_eq!(
+            snapshots
+                .iter()
+                .find(|display| display.id == b.id)
+                .and_then(|display| display.wallpaper_id.as_deref()),
             Some("wallpaper-b")
         );
     }

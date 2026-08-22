@@ -61,6 +61,7 @@ class Display : public QObject {
     Q_PROPERTY(QVariantMap canvasRect READ canvasRect NOTIFY canvasChanged FINAL)
     Q_PROPERTY(quint32 canvasOverlapCount READ canvasOverlapCount NOTIFY canvasChanged FINAL)
     Q_PROPERTY(bool selectableTarget READ selectableTarget NOTIFY canvasChanged FINAL)
+    Q_PROPERTY(QString wallpaperId READ wallpaperId NOTIFY wallpaperChanged FINAL)
 
 public:
     explicit Display(const proto::DisplayInfo& info, QObject* parent = nullptr);
@@ -98,6 +99,7 @@ public:
     auto canvasRect() const -> const QVariantMap& { return m_canvas_rect; }
     auto canvasOverlapCount() const -> quint32 { return m_canvas_overlap_count; }
     auto selectableTarget() const -> bool { return m_selectable_target; }
+    auto wallpaperId() const -> const QString& { return m_wallpaper_id; }
 
     /// Diff-update from a freshly-received `DisplayInfo`. Only emits
     /// the signals for properties that actually changed.
@@ -115,6 +117,7 @@ public:
     Q_SIGNAL void playlistStatusChanged();
     Q_SIGNAL void runtimeConditionsChanged();
     Q_SIGNAL void canvasChanged();
+    Q_SIGNAL void wallpaperChanged();
 
 private:
     static auto linksFromPb(const proto::DisplayInfo& info) -> QVariantList;
@@ -147,6 +150,7 @@ private:
     QVariantMap  m_canvas_rect;
     quint32      m_canvas_overlap_count { 0 };
     bool         m_selectable_target { true };
+    QString      m_wallpaper_id;
 };
 
 class Canvas : public QObject {

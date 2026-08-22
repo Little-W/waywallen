@@ -446,6 +446,33 @@
         <source>Rotation</source>
         <translation>旋转</translation>
     </message>
+    <message>
+        <source>Current wallpaper</source>
+        <translation>当前壁纸</translation>
+    </message>
+    <message>
+        <source>Wallpaper settings</source>
+        <translation>壁纸设置</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>正在加载…</translation>
+    </message>
+    <message>
+        <source>Untitled</source>
+        <translation>未命名</translation>
+    </message>
+    <message>
+        <source>No wallpaper assigned</source>
+        <translation>未设置壁纸</translation>
+    </message>
+</context>
+<context>
+    <name>WallpaperSettingsPage</name>
+    <message>
+        <source>Wallpaper settings</source>
+        <translation>壁纸设置</translation>
+    </message>
 </context>
 <context>
     <name>EmptyFilter</name>

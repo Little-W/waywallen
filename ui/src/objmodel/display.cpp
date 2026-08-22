@@ -123,7 +123,8 @@ Display::Display(const proto::DisplayInfo& info, QObject* parent)
       m_canvas_id(info.canvasId()),
       m_canvas_rect(info.hasCanvasRect() ? canvasRectFromPb(info.canvasRect()) : QVariantMap {}),
       m_canvas_overlap_count(info.canvasOverlapCount()),
-      m_selectable_target(info.selectableTarget()) {}
+      m_selectable_target(info.selectableTarget()),
+      m_wallpaper_id(info.wallpaperId()) {}
 
 void Display::updateFrom(const proto::DisplayInfo& info) {
     rstd_assert(info.displayId() == m_id, "Display::updateFrom id mismatch");
@@ -190,6 +191,10 @@ void Display::updateFrom(const proto::DisplayInfo& info) {
         m_canvas_overlap_count = info.canvasOverlapCount();
         m_selectable_target    = info.selectableTarget();
         Q_EMIT canvasChanged();
+    }
+    if (m_wallpaper_id != info.wallpaperId()) {
+        m_wallpaper_id = info.wallpaperId();
+        Q_EMIT wallpaperChanged();
     }
 }
 

@@ -192,6 +192,7 @@ set(QML_FILES
   qml/page/WallpaperPage.qml
   qml/page/PlaylistDetailPanel.qml
   qml/page/WallpaperDetailPanel.qml
+  qml/page/WallpaperSettingsPage.qml
   qml/page/DiscoverState.qml
   qml/page/RemoteDetailPanel.qml
   qml/page/WallpaperInfoPage.qml
