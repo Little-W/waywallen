@@ -389,6 +389,7 @@ async fn handshake_steps(
         presentation_caps: presentation_caps.flags,
         consumer_caps,
         window_state_flags,
+        virtual_target: false,
     })
 }
 

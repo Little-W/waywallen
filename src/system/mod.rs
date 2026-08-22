@@ -5,6 +5,7 @@ pub mod audio;
 pub mod autostart;
 pub(crate) mod dbus;
 mod gpu;
+pub(crate) mod kde_lockscreen;
 pub(crate) mod mpris;
 pub(crate) mod notifications;
 pub(crate) mod session;

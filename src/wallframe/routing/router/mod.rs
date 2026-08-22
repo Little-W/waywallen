@@ -228,6 +228,9 @@ pub struct DisplayRegistration {
     pub presentation_caps: u32,
     pub consumer_caps: crate::wallframe::dma::negotiate::PeerCaps,
     pub window_state_flags: u32,
+    /// A daemon-owned configuration target with no display transport. It is
+    /// visible to the UI but never receives frames while the screen is idle.
+    pub virtual_target: bool,
 }
 
 /// Stable identity used by the KDE wallpaper package when KScreenLocker
@@ -444,6 +447,9 @@ struct DisplayState {
     presentation_caps: u32,
     presentation: PresentationSnapshot,
     accepted: bool,
+    /// Configuration-only displays must not receive bindings, frames, or
+    /// participate in renderer lifecycle decisions.
+    virtual_target: bool,
     /// Per-display auto replay machine driven by display facts and
     /// the resolved rule policy.
     auto_replay: auto_replay::State,
@@ -1622,6 +1628,7 @@ impl Router {
         }
         let (tx, rx) = mpsc::unbounded_channel();
         let initial_window_state_flags = reg.window_state_flags;
+        let virtual_target = reg.virtual_target;
         let (display_id, display_session_id, auto_linked, canvas_id) = {
             let mut inner = self.inner.lock().await;
             inner.next_display_id += 1;
@@ -1638,6 +1645,7 @@ impl Router {
                 metrics: reg.metrics,
                 bound: false,
             };
+            let is_lockscreen = is_kde_lockscreen_display(&info);
             let canvas = self.canvas_for_info(&info);
             let pause_effect = self.resolved_pause_effect(reg.presentation_caps);
             let presentation = PresentationSnapshot {
@@ -1676,12 +1684,26 @@ impl Router {
                     presentation_caps: reg.presentation_caps,
                     presentation,
                     accepted: false,
+                    virtual_target,
                     auto_replay: auto_replay::State::new(),
                     consumption_epoch: Arc::new(AtomicU64::new(1)),
                 },
             );
             let canvas_id = canvas.as_ref().map(|(canvas_id, _)| canvas_id.clone());
-            let auto = if let Some((canvas_id, canvas)) = canvas {
+            let auto = if virtual_target {
+                // This surface persists settings only. A real lock-screen
+                // client recalls its assignment after it connects.
+                None
+            } else if is_lockscreen {
+                // Lock-screen clients must never inherit an arbitrary desktop
+                // renderer. They either resume their own recently-disconnected
+                // renderer or wait for the persisted lock-screen recall.
+                if let Some(renderer_id) = restored_renderer.clone() {
+                    let enabled = !inner.manual_stopped;
+                    inner.table.add_link_with_enabled(renderer_id, id, enabled);
+                }
+                restored_renderer
+            } else if let Some((canvas_id, canvas)) = canvas {
                 let existing = inner
                     .table
                     .all_links()
@@ -1747,25 +1769,27 @@ impl Router {
         if let Some(rid) = auto_linked.as_deref() {
             self.cancel_orphan_timer(rid).await;
         }
-        let auto_action = self
-            .update_auto_state(display_id, Some(initial_window_state_flags))
-            .await;
-        self.run_auto_state_action(auto_action).await;
-        if let Some(renderer_id) = auto_linked.as_deref() {
-            if let Err(error) = self
-                .request_renderer_start(renderer_id, RendererStartCause::DisplayReconnect)
-                .await
-            {
-                log::warn!("renderer {renderer_id}: display reconnect start failed: {error}");
+        if !virtual_target {
+            let auto_action = self
+                .update_auto_state(display_id, Some(initial_window_state_flags))
+                .await;
+            self.run_auto_state_action(auto_action).await;
+            if let Some(renderer_id) = auto_linked.as_deref() {
+                if let Err(error) = self
+                    .request_renderer_start(renderer_id, RendererStartCause::DisplayReconnect)
+                    .await
+                {
+                    log::warn!("renderer {renderer_id}: display reconnect start failed: {error}");
+                }
             }
+            self.reconcile_buffer_flags().await;
+            self.sync_display(display_id).await;
+            // A static renderer can have published its only frame before this
+            // consumer reconnected. Ask for its current frame after the Bind is
+            // queued so the newly registered display is guaranteed a replay.
+            self.resync_display_composition(display_id).await;
+            self.reconcile_lifecycle().await;
         }
-        self.reconcile_buffer_flags().await;
-        self.sync_display(display_id).await;
-        // A static renderer can have published its only frame before this
-        // consumer reconnected.  Ask for its current frame after the Bind is
-        // queued so the newly registered display is guaranteed a replay.
-        self.resync_display_composition(display_id).await;
-        self.reconcile_lifecycle().await;
         self.refresh_runtime_health().await;
         if let Some(snap) = self.snapshot_display(display_id).await {
             self.emit(RouterEvent::DisplayUpsert(snap));
@@ -1779,7 +1803,7 @@ impl Router {
                 .displays
                 .get_mut(&display_id)
                 .expect("registered display missing before acceptance");
-            state.accepted = true;
+            state.accepted = !virtual_target;
             state.presentation
         };
         Ok(DisplayHandle {
@@ -2336,6 +2360,49 @@ impl Router {
     /// inner displays map) read for apply-path preconditions.
     pub async fn display_count(self: &Arc<Self>) -> usize {
         self.inner.lock().await.displays.len()
+    }
+
+    /// Register the configuration-only KDE lock-screen target. It lets the
+    /// UI save a lock-screen wallpaper before KScreenLocker opens a client.
+    pub async fn register_kde_lockscreen_target(
+        self: &Arc<Self>,
+    ) -> crate::error::Result<DisplayHandle> {
+        use crate::wallframe::dma::negotiate::{DeviceIdentity, FormatCaps, PeerCaps};
+
+        self.try_register_display(DisplayRegistration {
+            name: "Lock Screen".into(),
+            instance_id: Some(KDE_LOCKSCREEN_INSTANCE_ID.into()),
+            metrics: DisplayMetrics {
+                width: 1920,
+                height: 1080,
+                refresh_mhz: 60_000,
+            },
+            presentation_caps: 0,
+            consumer_caps: PeerCaps {
+                formats: FormatCaps::default(),
+                identity: DeviceIdentity::ZERO,
+                sync: 0,
+                color: 0,
+                mem_hint: 0,
+                extent_max: (0, 0),
+                blacklist: HashSet::new(),
+            },
+            window_state_flags: 0,
+            virtual_target: true,
+        })
+        .await
+    }
+
+    /// Return daemon-owned configuration-only display ids so wallpaper
+    /// application can persist their selection without creating a renderer.
+    pub async fn virtual_display_ids(self: &Arc<Self>) -> HashSet<DisplayId> {
+        self.inner
+            .lock()
+            .await
+            .displays
+            .iter()
+            .filter_map(|(id, display)| display.virtual_target.then_some(*id))
+            .collect()
     }
 
     /// Registered display ids for an apply target. `None` means all
@@ -3688,6 +3755,7 @@ mod tests {
             presentation_caps: 0,
             consumer_caps: build_caps(N::DRM_FORMAT_ABGR8888, &[(N::DRM_FORMAT_MOD_LINEAR, 1)], 0),
             window_state_flags: 0,
+            virtual_target: false,
         }
     }
 
@@ -4130,6 +4198,62 @@ mod tests {
         assert!(!is_kde_lockscreen_display(&desktop));
         assert!(!session_lock_applies_to_display(&lockscreen, true));
         assert!(session_lock_applies_to_display(&desktop, true));
+    }
+
+    #[tokio::test]
+    async fn kde_lockscreen_configuration_target_is_visible_without_a_renderer() {
+        let router = Router::new(Arc::new(RendererManager::new_default()));
+        let target = router.register_kde_lockscreen_target().await.unwrap();
+
+        let snapshot = router.snapshot_display(target.id).await.unwrap();
+        assert_eq!(
+            snapshot.instance_id.as_deref(),
+            Some(KDE_LOCKSCREEN_INSTANCE_ID)
+        );
+        assert!(snapshot.links.is_empty());
+        assert!(router.virtual_display_ids().await.contains(&target.id));
+    }
+
+    #[tokio::test]
+    async fn kde_lockscreen_does_not_inherit_a_desktop_renderer() {
+        let router = Router::new(Arc::new(RendererManager::new_default()));
+        retained_renderer_with_display(&router).await;
+
+        let lockscreen = router
+            .register_display(reg_iid("DP-1", KDE_LOCKSCREEN_INSTANCE_ID))
+            .await;
+
+        assert!(router
+            .snapshot_display(lockscreen.id)
+            .await
+            .unwrap()
+            .links
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn kde_lockscreen_is_visible_only_while_its_client_is_registered() {
+        let router = Router::new(Arc::new(RendererManager::new_default()));
+        assert!(router
+            .snapshot_displays()
+            .await
+            .iter()
+            .all(|display| display.instance_id.as_deref() != Some(KDE_LOCKSCREEN_INSTANCE_ID)));
+
+        let lockscreen = router
+            .register_display(reg_iid("DP-1", KDE_LOCKSCREEN_INSTANCE_ID))
+            .await;
+        assert!(router.snapshot_displays().await.iter().any(|display| {
+            display.id == lockscreen.id
+                && display.instance_id.as_deref() == Some(KDE_LOCKSCREEN_INSTANCE_ID)
+        }));
+
+        router.unregister_display(lockscreen.id).await;
+        assert!(router
+            .snapshot_displays()
+            .await
+            .iter()
+            .all(|display| display.id != lockscreen.id));
     }
 
     async fn test_settings_store() -> Arc<crate::settings::SettingsStore> {

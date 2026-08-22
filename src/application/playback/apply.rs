@@ -394,6 +394,56 @@ async fn wait_for_apply_frame(
     Ok(())
 }
 
+/// Persist recall metadata for the selected configuration targets. Several
+/// endpoint sessions may legitimately share one stable key (KScreenLocker
+/// creates one per physical output), so write each key once rather than
+/// treating that shared identity as ambiguous.
+async fn persist_wallpaper_assignment(
+    app: &Arc<DaemonContext>,
+    wallpaper_id: &str,
+    resolved_targets: &[crate::wallframe::routing::ResolvedConfigTarget],
+) -> Result<()> {
+    let independent_ids = resolved_targets
+        .iter()
+        .filter_map(|target| match target.id {
+            crate::wallframe::routing::ConfigTargetId::Display(display_id) => Some(display_id),
+            crate::wallframe::routing::ConfigTargetId::Canvas(_) => None,
+        })
+        .collect::<Vec<_>>();
+    let keys = app
+        .router
+        .display_settings_keys(&independent_ids)
+        .await
+        .into_iter()
+        .map(|(_, key)| key)
+        .collect::<std::collections::HashSet<_>>();
+    let canvas_ids = resolved_targets
+        .iter()
+        .filter_map(|target| match &target.id {
+            crate::wallframe::routing::ConfigTargetId::Canvas(canvas_id) => Some(canvas_id.clone()),
+            crate::wallframe::routing::ConfigTargetId::Display(_) => None,
+        })
+        .collect::<Vec<_>>();
+    let wallpaper_id = wallpaper_id.to_string();
+    app.settings.update(|s| {
+        for key in &keys {
+            s.displays.entry(key.clone()).or_default().last_wallpaper = Some(wallpaper_id.clone());
+        }
+        s.global.last_wallpaper = Some(wallpaper_id.clone());
+    });
+    for canvas_id in &canvas_ids {
+        app.settings
+            .set_canvas_wallpaper(canvas_id, Some(wallpaper_id.clone()))?;
+    }
+    if !canvas_ids.is_empty() {
+        app.router.publish_canvas_snapshot().await;
+    }
+    // Flush recall state now so a crash inside the debounce window does not
+    // lose a lock-screen assignment before KScreenLocker connects.
+    app.settings.flush_now().await;
+    Ok(())
+}
+
 /// Shared global/per-display apply core.
 /// Spawns or reuses renderers, relinks displays, and persists recall state.
 pub async fn apply_wallpaper(
@@ -436,7 +486,61 @@ pub async fn apply_wallpaper(
         return Err(Error::NoDisplayRegistered);
     }
 
+    let virtual_ids = app.router.virtual_display_ids().await;
+    let render_targets = resolved_targets
+        .iter()
+        .filter_map(|target| {
+            let mut target = target.clone();
+            target
+                .members
+                .retain(|member| !virtual_ids.contains(&member.display_id));
+            (!target.members.is_empty()).then_some(target)
+        })
+        .collect::<Vec<_>>();
+    let render_target_ids = render_targets
+        .iter()
+        .flat_map(|target| target.members.iter().map(|member| member.display_id))
+        .collect::<Vec<_>>();
+
     let renderer = resolve_renderer(app, &entry, request.renderer_name.as_deref())?;
+    let stopped_playlists = if request.source == ApplySource::UserWallpaper {
+        super::playlist::stop_for_wallpaper_override(app, &target_ids, request.targets.is_none())
+            .await?
+    } else {
+        Vec::new()
+    };
+
+    if render_targets.is_empty() {
+        // Only the configured lock-screen surface was selected. Store the
+        // assignment; a real KScreenLocker client will recall it on connect.
+        {
+            let mut q = app.queue.lock().await;
+            q.current = Some(entry.item_id.to_string());
+            q.last_db_id = Some(entry.item_id);
+        }
+        let wp_id = entry.item_id.to_string();
+        persist_wallpaper_assignment(app, &wp_id, &resolved_targets).await?;
+        crate::system::dbus::notify_current_wallpaper_id_changed(app).await;
+        return Ok(ApplyResult {
+            renderer_id: String::new(),
+            entry,
+            stopped_playlists,
+            activation: ApplyActivation::Deferred,
+            targets: resolved_targets
+                .into_iter()
+                .map(|target| match target.id {
+                    crate::wallframe::routing::ConfigTargetId::Display(display_id) => {
+                        ApplyTarget::Display(display_id)
+                    }
+                    crate::wallframe::routing::ConfigTargetId::Canvas(canvas_id) => {
+                        ApplyTarget::Canvas(canvas_id)
+                    }
+                })
+                .collect(),
+            display_ids: target_ids,
+        });
+    }
+
     let renderer_plugin_name = renderer.name.clone();
     let apply = app
         .source_manager
@@ -454,20 +558,14 @@ pub async fn apply_wallpaper(
         user_property_overrides,
         default_user_properties: apply.default_user_properties,
     };
-    let stopped_playlists = if request.source == ApplySource::UserWallpaper {
-        super::playlist::stop_for_wallpaper_override(app, &target_ids, request.targets.is_none())
-            .await?
-    } else {
-        Vec::new()
-    };
     let duplicate_renderers = should_duplicate_renderers(
         app.settings.global().duplicate_renderers_for_same_wallpaper,
-        !target_ids.is_empty(),
+        !render_target_ids.is_empty(),
         request.sharing,
     );
     let inherited_layout =
         wallpaper_layout_override.apply_to(app.settings.resolved_global_layout());
-    let assignment_targets = resolved_targets
+    let assignment_targets = render_targets
         .iter()
         .map(|target| {
             let projections = match &target.id {
@@ -550,49 +648,7 @@ pub async fn apply_wallpaper(
     }
 
     let wp_id = entry.item_id.to_string();
-    let independent_ids = resolved_targets
-        .iter()
-        .filter_map(|target| match target.id {
-            crate::wallframe::routing::ConfigTargetId::Display(display_id) => Some(display_id),
-            crate::wallframe::routing::ConfigTargetId::Canvas(_) => None,
-        })
-        .collect::<Vec<_>>();
-    let keys = app.router.display_settings_keys(&independent_ids).await;
-    let live_displays = app.router.snapshot_displays().await;
-    let key_counts = live_displays.iter().fold(
-        std::collections::HashMap::<String, usize>::new(),
-        |mut counts, display| {
-            *counts.entry(display.settings_key.clone()).or_default() += 1;
-            counts
-        },
-    );
-    app.settings.update(|s| {
-        for (_did, key) in &keys {
-            if key_counts.get(key).copied().unwrap_or_default() != 1 {
-                continue;
-            }
-            let prefs = s.displays.entry(key.clone()).or_default();
-            prefs.last_wallpaper = Some(wp_id.clone());
-        }
-        s.global.last_wallpaper = Some(wp_id.clone());
-    });
-    let canvas_ids = resolved_targets
-        .iter()
-        .filter_map(|target| match &target.id {
-            crate::wallframe::routing::ConfigTargetId::Canvas(canvas_id) => Some(canvas_id.clone()),
-            crate::wallframe::routing::ConfigTargetId::Display(_) => None,
-        })
-        .collect::<Vec<_>>();
-    for canvas_id in &canvas_ids {
-        app.settings
-            .set_canvas_wallpaper(canvas_id, Some(wp_id.clone()))?;
-    }
-    if !canvas_ids.is_empty() {
-        app.router.publish_canvas_snapshot().await;
-    }
-    // Flush recall state now so a crash inside the debounce window does
-    // not lose the wallpaper needed by the next startup.
-    app.settings.flush_now().await;
+    persist_wallpaper_assignment(app, &wp_id, &resolved_targets).await?;
     crate::system::dbus::notify_current_wallpaper_id_changed(app).await;
 
     Ok(ApplyResult {

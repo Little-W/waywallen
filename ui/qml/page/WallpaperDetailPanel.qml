@@ -111,7 +111,9 @@ Item {
     readonly property var applyDisplayTargets: {
         const targets = [];
         const lockscreenKeys = new Set();
-        for (const display of W.App.displayManager.displays || []) {
+        const displays = [...(W.App.displayManager.displays || [])]
+            .sort((a, b) => Number(!!a.isLockscreen) - Number(!!b.isLockscreen));
+        for (const display of displays) {
             if (!display.selectableTarget)
                 continue;
             const settingsKey = String(display.settingsKey || "");

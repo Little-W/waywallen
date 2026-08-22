@@ -347,7 +347,9 @@ MD.Page {
             });
             fallbackX += width + root.displayGapPx;
         }
-        for (const d of W.App.displayManager.displays || []) {
+        const displays = [...(W.App.displayManager.displays || [])]
+            .sort((a, b) => Number(!!a.isLockscreen) - Number(!!b.isLockscreen));
+        for (const d of displays) {
             const settingsKey = String(d.settingsKey || d.name || "");
             if (assignedKeys.has(settingsKey))
                 continue;

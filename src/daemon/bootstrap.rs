@@ -316,6 +316,7 @@ pub async fn run(cli: DaemonConfig) -> anyhow::Result<()> {
     // Subscribe the process-wide handler before display clients can publish
     // transient handshake failures.
     event_process::spawn(state.clone(), cli.restore_last);
+    system::kde_lockscreen::spawn(state.clone());
 
     let display_sock_path = display::endpoint::default_socket_path();
     {
