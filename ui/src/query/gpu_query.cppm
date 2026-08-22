@@ -11,9 +11,9 @@ export import :query.query;
 namespace waywallen
 {
 
-/// One-shot fetch of the host's GPU set. Daemon never re-emits, so this
-/// is fired once on backend connect (see `App::init`) to populate the
-/// global `GpuManager`.
+/// Fetch the host's currently available GPU set.  It runs once on backend
+/// connect and can be reloaded from the settings UI after GPU topology
+/// changes (for example, an eGPU is attached).
 export class GpuListQuery : public Query, public QueryExtra<control::v1::Response, GpuListQuery> {
     Q_OBJECT
     QML_ELEMENT

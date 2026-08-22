@@ -351,17 +351,23 @@ ColumnLayout {
         }
     }
 
-    // GPU picker: empty value ⇒ "Auto" (renderer picks a device); otherwise
-    // the value is a DRM render-node path matching one Gpu.renderNode.
-    // Reads the live GPU list from App.gpuManager (populated on connect).
+    // GPU picker: empty value ⇒ automatic selection. The daemon matches the
+    // compositor GPU whenever all target displays use the same device;
+    // otherwise the explicit render-node path selected here is used.
     Component {
         id: renderNodeField
         Flow {
             spacing: 6
 
+            W.GpuListQuery {
+                id: gpuScan
+            }
+
+            Component.onCompleted: gpuScan.reload()
+
             MD.FilterChip {
                 id: autoChip
-                text: qsTr("Auto")
+                text: qsTr("Auto (recommended)")
                 checked: root.value === ""
                 onClicked: root._emit("")
                 Connections {
@@ -373,13 +379,25 @@ ColumnLayout {
                 }
             }
 
+            MD.BusyButton {
+                text: qsTr("Scan GPUs")
+                busy: gpuScan.querying
+                enabled: !busy
+                mdState.type: MD.Enum.BtFilledTonal
+                onClicked: gpuScan.reload()
+            }
+
             Repeater {
                 model: W.App.gpuManager ? W.App.gpuManager.gpus : []
                 delegate: MD.FilterChip {
                     id: gpuChip
                     required property var modelData
-                    text: (modelData.driver || "drm")
-                        + " " + modelData.renderMajor + ":" + modelData.renderMinor
+                    text: {
+                        const name = String(modelData.name || "").trim();
+                        const driver = String(modelData.driver || "drm").trim();
+                        const label = name.length > 0 ? name : driver;
+                        return label + " · " + modelData.renderNode;
+                    }
                     checked: root.value === modelData.renderNode
                     enabled: modelData.renderNode.length > 0
                     onClicked: root._emit(modelData.renderNode)
@@ -394,6 +412,13 @@ ColumnLayout {
                         }
                     }
                 }
+            }
+
+            MD.Text {
+                visible: !gpuScan.querying && (!W.App.gpuManager || W.App.gpuManager.count === 0)
+                text: qsTr("No usable GPU found")
+                typescale: MD.Token.typescale.body_small
+                color: MD.Token.color.on_surface_variant
             }
         }
     }

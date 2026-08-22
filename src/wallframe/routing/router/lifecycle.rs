@@ -18,6 +18,18 @@ enum AdvanceStart {
     Wait,
 }
 
+/// Return a GPU only when every known target is driven by the same render
+/// node.  A shared renderer cannot be optimal for two displays on different
+/// GPUs, so the caller deliberately leaves that mixed topology to the
+/// renderer's own default policy.
+fn single_known_display_gpu(gpus: impl IntoIterator<Item = DrmNode>) -> Option<DrmNode> {
+    let gpus = gpus
+        .into_iter()
+        .filter(|gpu| gpu.is_known())
+        .collect::<HashSet<_>>();
+    (gpus.len() == 1).then(|| *gpus.iter().next().expect("one GPU"))
+}
+
 impl Router {
     pub(super) async fn spawn_unassigned_renderer(
         self: &Arc<Self>,
@@ -446,6 +458,37 @@ impl Router {
         }
     }
 
+    /// Restart one retained renderer after an identity-setting change while
+    /// preserving its display links and composition.  Identity settings are
+    /// consumed during renderer initialization (for example, `render_node`),
+    /// so forwarding them as a runtime `SettingChanged` event cannot switch
+    /// the underlying Vulkan device.
+    pub async fn restart_renderer(self: &Arc<Self>, renderer_id: &str) -> crate::error::Result<()> {
+        let displays = {
+            let inner = self.inner.lock().await;
+            inner
+                .table
+                .links_for_renderer(renderer_id)
+                .into_iter()
+                .filter(|link| link.enabled)
+                .map(|link| link.display_id)
+                .collect::<Vec<_>>()
+        };
+
+        self.begin_retained_stop(renderer_id).await;
+        for display_id in displays {
+            self.sync_display(display_id).await;
+        }
+        self.finish_retained_stop(renderer_id).await;
+        self.request_renderer_start(
+            renderer_id,
+            RendererStartCause::ExplicitApply {
+                preempt_pending: true,
+            },
+        )
+        .await
+    }
+
     pub(super) async fn request_renderer_start(
         self: &Arc<Self>,
         renderer_id: &str,
@@ -629,6 +672,53 @@ impl Router {
         effect: RendererStartEffect,
     ) -> crate::error::Result<()> {
         let renderer_id = effect.renderer_id.clone();
+        let mut spawn_request = effect.spawn_request;
+
+        // Empty `render_node` means automatic selection.  Once a wallpaper
+        // is linked to displays, their consumer-side DRM node is the most
+        // reliable high-performance choice: it keeps DMA-BUF sharing on the
+        // compositor's GPU and avoids a cross-GPU copy.  An explicit setting
+        // always wins, and mixed-GPU target sets retain renderer-default
+        // behaviour because no single device can be optimal for all outputs.
+        let has_explicit_gpu = spawn_request
+            .settings
+            .get(crate::system::RENDER_NODE_KEY)
+            .is_some_and(|value| !value.trim().is_empty())
+            || spawn_request
+                .settings
+                .get(crate::system::GPU_DRM_DEV_KEY)
+                .is_some_and(|value| !value.trim().is_empty());
+        if !has_explicit_gpu {
+            let (gpu, target_count) = {
+                let inner = self.inner.lock().await;
+                let target_gpus = inner
+                    .table
+                    .links_for_renderer(&renderer_id)
+                    .into_iter()
+                    .filter_map(|link| {
+                        inner
+                            .displays
+                            .get(&link.display_id)
+                            .map(|display| display.gpu)
+                    })
+                    .collect::<Vec<_>>();
+                let count = target_gpus.len();
+                (single_known_display_gpu(target_gpus), count)
+            };
+            if let Some(gpu) = gpu {
+                let value = crate::system::format_drm_dev(gpu.major, gpu.minor);
+                log::info!(
+                    "renderer {renderer_id}: auto-selected compositor GPU {value} for {target_count} display(s)"
+                );
+                spawn_request
+                    .settings
+                    .insert(crate::system::GPU_DRM_DEV_KEY.to_string(), value);
+            } else if target_count > 1 {
+                log::info!(
+                    "renderer {renderer_id}: automatic GPU selection skipped for mixed or unknown display GPUs"
+                );
+            }
+        }
         log::info!(
             "renderer {renderer_id}: start cause={} generation={}",
             effect.cause.as_str(),
@@ -639,7 +729,7 @@ impl Router {
             .spawn_for_generation(
                 renderer_id.clone(),
                 effect.process_generation,
-                effect.spawn_request,
+                spawn_request,
             )
             .await
         {
@@ -870,5 +960,26 @@ impl Router {
             .renderer_slots
             .get(renderer_id)
             .is_some_and(|slot| slot.state.activity() == Some(RendererActivity::Muted))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_gpu_selection_requires_one_known_target_gpu() {
+        let nvidia = DrmNode {
+            major: 226,
+            minor: 129,
+        };
+        let intel = DrmNode {
+            major: 226,
+            minor: 128,
+        };
+
+        assert_eq!(single_known_display_gpu([nvidia, nvidia]), Some(nvidia));
+        assert_eq!(single_known_display_gpu([nvidia, intel]), None);
+        assert_eq!(single_known_display_gpu([DrmNode::UNKNOWN]), None);
     }
 }

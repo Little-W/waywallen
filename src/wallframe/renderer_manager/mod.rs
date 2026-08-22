@@ -824,10 +824,17 @@ impl RendererManager {
         // Translate the user's GPU choice into a render-node path before
         // settings reach the subprocess.
         if let Some(raw) = req.settings.remove(crate::system::GPU_DRM_DEV_KEY) {
-            let resolved = self
-                .system_info
-                .get()
-                .and_then(|system| system.render_node_for_drm_dev(&raw))
+            // Re-scan first: the UI can discover a GPU after daemon startup
+            // (notably an eGPU).  Keep the startup snapshot as a fallback
+            // in case a transient scan cannot see an otherwise valid node.
+            let live_system = crate::system::SystemInfo::load();
+            let resolved = live_system
+                .render_node_for_drm_dev(&raw)
+                .or_else(|| {
+                    self.system_info
+                        .get()
+                        .and_then(|system| system.render_node_for_drm_dev(&raw))
+                })
                 .and_then(|path| path.to_str().map(str::to_owned));
             if let Some(path) = resolved {
                 req.settings

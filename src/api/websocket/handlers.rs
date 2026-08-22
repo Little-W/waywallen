@@ -844,12 +844,12 @@ pub(super) async fn dispatch_inner(
         }
 
         Req::GpuList(_) => {
-            let gpus = state
-                .system_info
-                .gpus()
-                .iter()
-                .map(gpu_info_to_pb)
-                .collect();
+            // GPU topology may change after the daemon starts (for example
+            // an eGPU is attached).  This request backs the UI's explicit
+            // "Scan GPUs" action, so enumerate the live DRM nodes rather
+            // than returning the startup snapshot.
+            let system_info = crate::system::SystemInfo::load();
+            let gpus = system_info.gpus().iter().map(gpu_info_to_pb).collect();
             Res::GpuList(pb::GpuListResponse { gpus })
         }
 
@@ -1863,6 +1863,7 @@ pub(super) async fn dispatch_inner(
             let mut apply_failures: Vec<String> = Vec::new();
             let registry = state.renderer_manager.registry_snapshot();
             let live_ids = state.renderer_manager.list().await;
+            let mut identity_restarts: Vec<(String, String)> = Vec::new();
             for def in registry.all_renderers() {
                 let old_kv = previous_settings.resolved_renderer_settings(def);
                 let new_kv = current_settings.resolved_renderer_settings(def);
@@ -1877,15 +1878,24 @@ pub(super) async fn dispatch_inner(
                 if kv.is_empty() {
                     continue;
                 }
-                state
+                let updated = state
                     .router
                     .update_renderer_assignment_settings(&def.name, &kv)
                     .await;
+                let identity_changed = kv.iter().any(|(key, _)| {
+                    def.settings
+                        .get(key)
+                        .is_some_and(|setting| setting.identity)
+                });
                 for id in &live_ids {
                     let Some(handle) = state.renderer_manager.get(id).await else {
                         continue;
                     };
-                    if handle.name != def.name {
+                    if handle.name != def.name || !updated.contains(id) {
+                        continue;
+                    }
+                    if identity_changed {
+                        identity_restarts.push((id.clone(), def.name.clone()));
                         continue;
                     }
                     if let Err(e) = state
@@ -1895,6 +1905,13 @@ pub(super) async fn dispatch_inner(
                     {
                         apply_failures.push(format!("{id} ({}): {e}", def.name));
                     }
+                }
+            }
+            identity_restarts.sort();
+            identity_restarts.dedup();
+            for (renderer_id, renderer_name) in identity_restarts {
+                if let Err(e) = state.router.restart_renderer(&renderer_id).await {
+                    apply_failures.push(format!("{renderer_id} ({renderer_name}): {e}"));
                 }
             }
             // Push the merged post-write state to all WS subscribers so

@@ -69,9 +69,8 @@ private:
     QString m_description;
 };
 
-/// Singleton model holding the host's GPU set. Populated once at backend
-/// connect via `GpuListQuery::reload` (no push events — daemon enumerates
-/// at startup and the set is static for the daemon's lifetime).
+/// Singleton model holding the host's GPU set. Populated at backend connect
+/// and replaced by each explicit `GpuListQuery::reload` scan.
 ///
 /// `find(major, minor)` resolves a DRM node id (either the render or primary
 /// node) to the owning Gpu*. Renderers carry a render-node id, displays
