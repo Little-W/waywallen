@@ -45,6 +45,11 @@ Item {
     function displayTargetKey(id) {
         return "display:" + id;
     }
+    function displayTargetKeyForDisplay(display) {
+        if (display?.isLockscreen && (display.settingsKey || "").length)
+            return "display-key:" + display.settingsKey;
+        return root.displayTargetKey(display?.id);
+    }
     function canvasTargetKey(id) {
         return "canvas:" + id;
     }
@@ -63,6 +68,13 @@ Item {
                 const display = W.App.displayManager.get(Number(key.slice(8)));
                 if (display && display.selectableTarget)
                     targets.push({ displayId: display.id });
+            } else if (key.indexOf("display-key:") === 0) {
+                const settingsKey = key.slice(12);
+                for (const display of W.App.displayManager.displays || []) {
+                    if (display.isLockscreen && display.settingsKey === settingsKey
+                            && display.selectableTarget)
+                        targets.push({ displayId: display.id });
+                }
             }
         }
         return targets;
@@ -78,6 +90,12 @@ Item {
                 const display = W.App.displayManager.get(Number(key.slice(8)));
                 if (display && display.selectableTarget)
                     next.push(key);
+            } else if (key.indexOf("display-key:") === 0) {
+                const settingsKey = key.slice(12);
+                if ((W.App.displayManager.displays || []).some(display =>
+                        display.isLockscreen && display.settingsKey === settingsKey
+                        && display.selectableTarget))
+                    next.push(key);
             }
         }
         if (next.length !== root.applyTargetKeys.length) {
@@ -89,6 +107,22 @@ Item {
         const standalone = (W.App.displayManager.displays || []).some(display => display.selectableTarget);
         const liveCanvas = (W.App.displayManager.canvases || []).some(canvas => canvas.hasLiveDisplays);
         return standalone || liveCanvas;
+    }
+    readonly property var applyDisplayTargets: {
+        const targets = [];
+        const lockscreenKeys = new Set();
+        for (const display of W.App.displayManager.displays || []) {
+            if (!display.selectableTarget)
+                continue;
+            const settingsKey = String(display.settingsKey || "");
+            if (display.isLockscreen && settingsKey.length) {
+                if (lockscreenKeys.has(settingsKey))
+                    continue;
+                lockscreenKeys.add(settingsKey);
+            }
+            targets.push(display);
+        }
+        return targets;
     }
     function fillmodeIndex(value) {
         const i = root.kFillModeValues.indexOf(value);
@@ -1081,22 +1115,15 @@ Item {
                     }
 
                     Repeater {
-                        model: W.App.displayManager.displays
+                        model: root.applyDisplayTargets
                         MD.FilterChip {
                             required property var modelData
                             visible: !!modelData?.selectableTarget
                             width: visible ? Math.min(implicitWidth, 220) : 0
-                            text: {
-                                const alias = modelData?.alias || "";
-                                const name = (modelData?.name || "").replace(/^waywallen-[a-z]+-[a-z]+-/, "");
-                                const base = alias.length > 0 ? alias : name;
-                                if (!base.length)
-                                    return qsTr("Display #%1").arg(modelData?.id);
-                                return base + " (#" + modelData?.id + ")";
-                            }
+                            text: modelData?.displayLabel || qsTr("Display #%1").arg(modelData?.id)
                             icon.name: MD.Token.icon.monitor
-                            checked: root.applyTargetKeys.indexOf(root.displayTargetKey(modelData?.id)) >= 0
-                            onClicked: root.toggleTarget(root.displayTargetKey(modelData?.id))
+                            checked: root.applyTargetKeys.indexOf(root.displayTargetKeyForDisplay(modelData)) >= 0
+                            onClicked: root.toggleTarget(root.displayTargetKeyForDisplay(modelData))
                         }
                     }
                 }

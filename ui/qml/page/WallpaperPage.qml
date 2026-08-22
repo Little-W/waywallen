@@ -692,6 +692,7 @@ MD.Page {
     property var playlistPlayDisplayId: null
     readonly property var playlistPlayDisplays: {
         const targets = [];
+        const lockscreenKeys = new Set();
         for (const canvas of W.App.displayManager.canvases || []) {
             const displayIds = [];
             for (const member of canvas.members || []) {
@@ -709,15 +710,31 @@ MD.Page {
             }
         }
         for (const display of W.App.displayManager.displays || []) {
-            if (display.selectableTarget) {
+            if (!display.selectableTarget)
+                continue;
+            const settingsKey = String(display.settingsKey || "");
+            if (display.isLockscreen && settingsKey.length) {
+                if (lockscreenKeys.has(settingsKey))
+                    continue;
+                lockscreenKeys.add(settingsKey);
+                const ids = (W.App.displayManager.displays || [])
+                    .filter(item => item.isLockscreen && item.settingsKey === settingsKey
+                            && item.selectableTarget)
+                    .map(item => item.id);
                 targets.push({
-                    targetId: "display:" + display.id,
+                    targetId: "display-key:" + settingsKey,
                     targetLabel: root.rawDisplayLabel(display),
                     targetIcon: MD.Token.icon.monitor,
-                    target: { displayId: display.id },
-                    displayIds: [display.id]
+                    displayIds: ids
                 });
+                continue;
             }
+            targets.push({
+                targetId: "display:" + display.id,
+                targetLabel: root.rawDisplayLabel(display),
+                targetIcon: MD.Token.icon.monitor,
+                displayIds: [display.id]
+            });
         }
         return targets;
     }
@@ -752,6 +769,8 @@ MD.Page {
     }
 
     function rawDisplayLabel(display) {
+        if ((display.displayLabel || "").length)
+            return display.displayLabel;
         let base = display.alias || "";
         if (!base.length)
             base = (display.name || "").replace(/^waywallen-[a-z]+-[a-z]+-/, "");
@@ -837,7 +856,9 @@ MD.Page {
         const display = root.selectedPlaylistDisplay();
         if (!display)
             return;
-        const targets = [display.target];
+        const targets = display.target
+            ? [display.target]
+            : (display.displayIds || []).map(id => ({ displayId: id }));
         if (root.playlistIsPlayingOnSelectedDisplay(playlist))
             playlistPlaybackMutation.deactivate(targets, 0);
         else

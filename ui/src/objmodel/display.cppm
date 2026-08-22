@@ -31,6 +31,7 @@ class Display : public QObject {
     Q_PROPERTY(QString name READ name NOTIFY nameChanged FINAL)
     Q_PROPERTY(QString alias READ alias NOTIFY aliasChanged FINAL)
     Q_PROPERTY(QString displayLabel READ displayLabel NOTIFY displayLabelChanged FINAL)
+    Q_PROPERTY(bool isLockscreen READ isLockscreen NOTIFY identityChanged FINAL)
     Q_PROPERTY(QString instanceId READ instanceId NOTIFY identityChanged FINAL)
     Q_PROPERTY(QString settingsKey READ settingsKey NOTIFY identityChanged FINAL)
     Q_PROPERTY(quint32 width READ width NOTIFY sizeChanged FINAL)
@@ -68,9 +69,15 @@ public:
     auto name() const -> const QString& { return m_name; }
     auto alias() const -> const QString& { return m_alias; }
     auto displayLabel() const -> QString {
-        const QString base = m_alias.isEmpty() ? m_name : m_alias;
+        if (isLockscreen()) return tr("Lock Screen");
+        const QString base = m_alias.isEmpty()
+            ? m_name
+            : m_alias;
         if (base.isEmpty()) return QString("Display #%1").arg(m_id);
         return QString("%1 (#%2)").arg(base).arg(m_id);
+    }
+    auto isLockscreen() const -> bool {
+        return m_instance_id == QString::fromLatin1("org.waywallen.kde.lockscreen");
     }
     auto instanceId() const -> const QString& { return m_instance_id; }
     auto settingsKey() const -> const QString& { return m_settings_key; }

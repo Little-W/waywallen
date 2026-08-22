@@ -324,6 +324,7 @@ MD.Page {
     function layoutTargets() {
         const out = [];
         const assignedKeys = new Set();
+        const lockscreenKeys = new Set();
         const defaultExtent = root.defaultCanvasExtent();
         let fallbackX = 0;
         for (const canvasObject of W.App.displayManager.canvases || []) {
@@ -347,8 +348,14 @@ MD.Page {
             fallbackX += width + root.displayGapPx;
         }
         for (const d of W.App.displayManager.displays || []) {
-            if (assignedKeys.has(String(d.settingsKey || d.name || "")))
+            const settingsKey = String(d.settingsKey || d.name || "");
+            if (assignedKeys.has(settingsKey))
                 continue;
+            if (d.isLockscreen && settingsKey.length) {
+                if (lockscreenKeys.has(settingsKey))
+                    continue;
+                lockscreenKeys.add(settingsKey);
+            }
             const w = Number(d.width || 1);
             const h = Number(d.height || 1);
             out.push({

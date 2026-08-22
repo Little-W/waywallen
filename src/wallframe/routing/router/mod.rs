@@ -230,6 +230,19 @@ pub struct DisplayRegistration {
     pub window_state_flags: u32,
 }
 
+/// Stable identity used by the KDE wallpaper package when KScreenLocker
+/// creates its display clients. Keeping this independent of output names
+/// makes the lock screen a durable, separately-configurable target.
+const KDE_LOCKSCREEN_INSTANCE_ID: &str = "org.waywallen.kde.lockscreen";
+
+fn is_kde_lockscreen_display(info: &DisplayInfo) -> bool {
+    info.instance_id.as_deref() == Some(KDE_LOCKSCREEN_INSTANCE_ID)
+}
+
+fn session_lock_applies_to_display(info: &DisplayInfo, session_locked: bool) -> bool {
+    session_locked && !is_kde_lockscreen_display(info)
+}
+
 /// Returned from `register_display` — the assigned id plus the rx end
 /// of the dispatcher's per-display channel.
 pub struct DisplayHandle {
@@ -4086,6 +4099,37 @@ mod tests {
         let mut registration = reg(name, 1920, 1080);
         registration.instance_id = Some(iid.into());
         registration
+    }
+
+    #[test]
+    fn kde_lockscreen_identity_is_recognized_without_matching_desktop_names() {
+        let lockscreen = DisplayInfo {
+            id: 1,
+            name: "DP-1".into(),
+            instance_id: Some(KDE_LOCKSCREEN_INSTANCE_ID.into()),
+            metrics: DisplayMetrics {
+                width: 1920,
+                height: 1080,
+                refresh_mhz: 60_000,
+            },
+            bound: false,
+        };
+        let desktop = DisplayInfo {
+            id: 2,
+            name: "Lock Screen".into(),
+            instance_id: Some("kde-display-a".into()),
+            metrics: DisplayMetrics {
+                width: 1920,
+                height: 1080,
+                refresh_mhz: 60_000,
+            },
+            bound: false,
+        };
+
+        assert!(is_kde_lockscreen_display(&lockscreen));
+        assert!(!is_kde_lockscreen_display(&desktop));
+        assert!(!session_lock_applies_to_display(&lockscreen, true));
+        assert!(session_lock_applies_to_display(&desktop, true));
     }
 
     async fn test_settings_store() -> Arc<crate::settings::SettingsStore> {

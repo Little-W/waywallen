@@ -245,7 +245,11 @@ impl Router {
             &policy,
             auto_replay::Facts {
                 flags: next_flags,
-                session_locked,
+                // The lock-screen client is the renderer that must remain
+                // active while ScreenSaver.Active is true. Desktop clients
+                // keep the normal auto-stop policy; inactive user sessions
+                // still stop every client as before.
+                session_locked: session_lock_applies_to_display(&state.info, session_locked),
                 session_inactive,
             },
         );
