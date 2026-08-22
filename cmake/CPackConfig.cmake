@@ -61,6 +61,10 @@ set(CPACK_RPM_PACKAGE_LICENSE             "GPL-3.0-or-later")
 set(CPACK_RPM_PACKAGE_GROUP               "Applications/System")
 set(CPACK_RPM_PACKAGE_URL                 "${CPACK_PACKAGE_HOMEPAGE_URL}")
 set(CPACK_RPM_PACKAGE_AUTOREQ             ON)
+# QML effect modules are loaded dynamically, so RPM's ELF dependency scanner
+# cannot discover them from the executable. QtQuick.Effects is provided by
+# qt6-declarative-imports; the old Qt5Compat effects module is no longer used.
+set(CPACK_RPM_PACKAGE_REQUIRES            "qt6-declarative-imports")
 set(CPACK_RPM_FILE_NAME                   RPM-DEFAULT)
 # Don't claim ownership of standard system dirs.
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION

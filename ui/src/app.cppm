@@ -34,6 +34,7 @@ export class App : public QObject {
         QString resolvedUiLanguage READ resolvedUiLanguage NOTIFY resolvedUiLanguageChanged FINAL)
     Q_PROPERTY(
         QVariantList availableUiLanguages READ availableUiLanguages NOTIFY uiLanguageChanged FINAL)
+    Q_PROPERTY(bool frostedGlassAvailable READ frostedGlassAvailable CONSTANT FINAL)
 
 public:
     App(quint16 port, rstd::empty);
@@ -56,6 +57,7 @@ public:
     auto uiLanguage() const -> const QString&;
     auto resolvedUiLanguage() const -> const QString&;
     auto availableUiLanguages() const -> QVariantList;
+    auto frostedGlassAvailable() const -> bool;
 
     auto engine() const -> QQmlApplicationEngine*;
     auto backend() const -> Backend*;

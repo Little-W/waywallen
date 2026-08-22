@@ -23,6 +23,7 @@ find_package(
              ProtobufWellKnownTypes
              QuickPrivate
              WebSockets)
+find_package(KF6WindowSystem REQUIRED)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SplitMocFiles.cmake)
 
 if(QT_KNOWN_POLICY_QTP0004)
@@ -159,6 +160,20 @@ set(MODULES
 set(QML_FILES
   qml/Window.qml
   qml/Global.qml
+  qml/component/CupertinoSurface.qml
+  qml/component/CupertinoFrostedBar.qml
+  qml/component/CupertinoFrostedBottomSheet.qml
+  qml/component/CupertinoSidebar.qml
+  qml/component/CupertinoDialog.qml
+  qml/component/CupertinoAppBar.qml
+  qml/component/CupertinoPane.qml
+  qml/component/CupertinoPage.qml
+  qml/component/CupertinoMenu.qml
+  qml/component/CupertinoComboBox.qml
+  qml/component/CupertinoSwitch.qml
+  qml/component/CupertinoFilterChip.qml
+  qml/component/CupertinoInputChip.qml
+  qml/component/CupertinoEmbedChip.qml
   qml/component/StatusDot.qml
   qml/component/PagePopup.qml
   qml/component/Tag.qml
@@ -248,6 +263,7 @@ qt_add_qml_module(
   DEPENDENCIES
   QtCore
   QtQuick
+  QtQuick.Effects
   QtQuick.Shapes
   QtQml.Models
   Qcm.Material
@@ -311,6 +327,7 @@ target_link_libraries(waywallen-qml
     ncrequest
     qextra
     wavsen::decode
+    KF6::WindowSystem
 )
 
 qt_add_executable(${PROJECT_NAME} MANUAL_FINALIZATION src/main.cpp)

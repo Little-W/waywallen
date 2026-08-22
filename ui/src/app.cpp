@@ -1,7 +1,20 @@
 module;
 #include "waywallen/app.moc.h"
 #undef assert
+#include <KWindowEffects>
+#include <KWindowSystem>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QElapsedTimer>
+#include <QRegion>
+#include <QScreen>
+#include <QTimer>
+#include <QVector>
 #include <rstd/macro.hpp>
+#include <algorithm>
+#include <cstdio>
+#include <memory>
+#include <numeric>
 
 module waywallen;
 import :app;
@@ -55,6 +68,7 @@ public:
     Box<QQmlApplicationEngine> m_qml_engine;
     Box<UiLanguageController>  m_ui_language;
     qint64                     m_network_cache_size { 0 };
+    bool                       m_frosted_glass_available { false };
     quint16                    m_port;
 };
 
@@ -155,6 +169,16 @@ void App::init() {
     // Connect to the daemon's WebSocket (no-op if port is still 0).
     d->m_backend->connectTo();
 
+    // `isEffectAvailable()` is based on the legacy atom capability and can
+    // return false on a Wayland KWin session even though KWin accepts the
+    // modern blur request.  Detect the active KWin service as the Wayland
+    // fallback, so QML can use translucent surfaces on the compositor that
+    // actually owns the effect.
+    const auto* session_dbus = QDBusConnection::sessionBus().interface();
+    const bool wayland_kwin = KWindowSystem::isPlatformWayland() && session_dbus
+        && session_dbus->isServiceRegistered(u"org.kde.KWin"_s).value();
+    d->m_frosted_glass_available = KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind)
+        || wayland_kwin;
     engine->addImportPath(u"qrc:/"_s);
     // Load the main window from the QML module.
     engine->loadFromModule("waywallen.ui", "Window");
@@ -166,6 +190,110 @@ void App::init() {
     }
 
     rstd_assert(d->m_main_win, "main window must exist");
+
+    // Opt-in scene graph frame telemetry for release-performance validation.
+    // This remains entirely dormant in normal builds and lets the same binary
+    // report actual presentation cadence on the user's GPU/output instead of
+    // relying on a software-rendered test server.
+    if (qEnvironmentVariableIsSet("WAYWALLEN_FRAME_TIMING")) {
+        struct FrameTimingState {
+            QElapsedTimer clock;
+            qint64 last_frame_ns { 0 };
+            QVector<qint64> intervals_ns;
+        };
+        auto timing = std::make_shared<FrameTimingState>();
+        timing->clock.start();
+        const auto* screen = d->m_main_win->screen();
+        std::fprintf(stderr, "waywallen frame timing: enabled platform=%s screen=%s refresh_hz=%.3f\n",
+                     qPrintable(QGuiApplication::platformName()),
+                     screen ? qPrintable(screen->name()) : "unknown",
+                     screen ? screen->refreshRate() : 0.0);
+        std::fflush(stderr);
+        QObject::connect(d->m_main_win, &QQuickWindow::frameSwapped, d->m_main_win,
+                         [timing] {
+            const auto now = timing->clock.nsecsElapsed();
+            if (timing->last_frame_ns == 0) {
+                timing->last_frame_ns = now;
+                return;
+            }
+
+            const auto interval = now - timing->last_frame_ns;
+            timing->last_frame_ns = now;
+            // A long idle gap is not a slow frame.  Start a fresh sample run
+            // so the report represents an active animation or scroll.
+            if (interval > 50'000'000) {
+                timing->intervals_ns.clear();
+                return;
+            }
+            timing->intervals_ns.push_back(interval);
+            if (timing->intervals_ns.size() < 60)
+                return;
+
+            auto sorted = timing->intervals_ns;
+            std::sort(sorted.begin(), sorted.end());
+            const auto percentile = [&sorted](int percentage) {
+                const auto index = qMin(sorted.size() - 1,
+                                        (sorted.size() * percentage + 99) / 100 - 1);
+                return sorted.at(index);
+            };
+            const auto total = std::accumulate(sorted.cbegin(), sorted.cend(), qint64 { 0 });
+            const auto missed = std::count_if(sorted.cbegin(), sorted.cend(),
+                                              [](qint64 value) { return value > 6'150'000; });
+            std::fprintf(stderr,
+                         "waywallen frame timing: frames=%lld avg_ms=%.3f p95_ms=%.3f "
+                         "p99_ms=%.3f over_165hz=%lld\n",
+                         static_cast<long long>(sorted.size()),
+                         total / double(sorted.size()) / 1'000'000.0,
+                         percentile(95) / 1'000'000.0,
+                         percentile(99) / 1'000'000.0,
+                         static_cast<long long>(missed));
+            std::fflush(stderr);
+            timing->intervals_ns.clear();
+        }, Qt::DirectConnection);
+    }
+
+    if (d->m_frosted_glass_available) {
+        // QML draws the tint; KWin draws the actual blur. Apply once now and
+        // again after the QML event loop has created the Wayland surface;
+        // some KWin sessions allocate that surface just after Window.qml.
+        const auto apply_frosted_glass = [window = QPointer<QQuickWindow>(d->m_main_win)] {
+            if (!window)
+                return;
+
+            // KWin treats an empty blur region as the entire window.  Most of
+            // the desktop shell is intentionally opaque, so blurring all of
+            // it wastes compositor work behind every scrolling thumbnail.
+            // Limit the native effect to the actual glass affordance instead.
+            constexpr int desktop_sidebar_width = 240;
+            // Keep the native KWin region in lockstep with Qcm.Material's
+            // WindowClassCompact cutoff. Otherwise the 600--639px range
+            // renders a desktop sidebar while KWin only blurs a nonexistent
+            // compact bottom bar.
+            constexpr int compact_breakpoint = 600;
+            // Keep the compositor's behind-window region aligned with the
+            // full QML glass field, not merely its shorter navigation row.
+            constexpr int compact_bottom_bar_height = 88;
+            const bool compact = window->width() < compact_breakpoint;
+            const QRegion blur_region = compact
+                ? QRegion(0, qMax(0, window->height() - compact_bottom_bar_height),
+                          qMax(0, window->width()), qMin(compact_bottom_bar_height, window->height()))
+                : QRegion(0, 0, qMin(desktop_sidebar_width, window->width()),
+                          qMax(0, window->height()));
+
+            window->setColor(Qt::transparent);
+            KWindowEffects::enableBlurBehind(window.data(), !blur_region.isEmpty(), blur_region);
+            // The glass tints provide contrast themselves.  KWin's contrast
+            // effect flattens the blurred backdrop on some Wayland themes.
+            KWindowEffects::enableBackgroundContrast(window.data(), false);
+        };
+        apply_frosted_glass();
+        QObject::connect(d->m_main_win, &QWindow::widthChanged, d->m_main_win,
+                         [apply_frosted_glass](int) { apply_frosted_glass(); });
+        QObject::connect(d->m_main_win, &QWindow::heightChanged, d->m_main_win,
+                         [apply_frosted_glass](int) { apply_frosted_glass(); });
+        QTimer::singleShot(0, d->m_main_win, apply_frosted_glass);
+        QTimer::singleShot(80, d->m_main_win, apply_frosted_glass);
+    }
 }
 
 auto App::engine() const -> QQmlApplicationEngine* {
@@ -221,6 +349,11 @@ auto App::resolvedUiLanguage() const -> const QString& {
 auto App::availableUiLanguages() const -> QVariantList {
     Q_D(const App);
     return d->m_ui_language->availableLanguages();
+}
+
+auto App::frostedGlassAvailable() const -> bool {
+    Q_D(const App);
+    return d->m_frosted_glass_available;
 }
 
 void App::refreshNetworkCacheSize() {

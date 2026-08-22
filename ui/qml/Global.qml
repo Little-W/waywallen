@@ -9,12 +9,41 @@ QtObject {
     id: root
 
     property bool sidebarAutoExpand: true
+    // Ephemeral scene state used while the desktop shell changes width. It is
+    // deliberately not persisted: animated previews can pause for this short
+    // transition without changing a user's wallpaper settings.
+    property bool sidebarAnimating: false
+    // Compact navigation is an overlay rather than a layout row. Pages use
+    // this transient safe inset so their final item can scroll above it while
+    // ordinary content still travels beneath the live material.
+    property real compactNavigationInset: 0
     property int networkCacheMaximumMiB: 1024
     property string themeMode: "system"
-    readonly property color defaultAccentColor: "#6750A4"
-    property string accentMode: "system"
+    // Cupertino's default blue. Users can still switch back to the system
+    // accent or choose any custom color from Settings.
+    readonly property color defaultAccentColor: "#0A84FF"
+    property string accentMode: "custom"
     property color accentColor: defaultAccentColor
     property string lastOpenedVersion: ""
+    // Custom accent is intentionally used directly by high-salience controls
+    // such as switches.  For the system mode, defer to Qcm's resolved token.
+    readonly property color effectiveAccentColor: accentMode === "custom"
+        ? accentColor
+        : MD.Token.color.primary
+
+    // Keep the desktop shell neutral rather than deriving its large surfaces
+    // from Material's accent-seeded tonal palette. Qcm still supplies the
+    // controls, typography, interaction states and dynamic accent colors.
+    readonly property bool cupertinoDark: MD.Token.isDarkTheme
+    readonly property color cupertinoCanvas: cupertinoDark ? "#1C1C1E" : "#F7F7FA"
+    readonly property color cupertinoSidebar: cupertinoDark ? "#242426" : "#F5F5F7"
+    readonly property color cupertinoCard: cupertinoDark ? "#2C2C2E" : "#FFFFFF"
+    readonly property color cupertinoBorder: cupertinoDark ? "#3A3A3C" : "#D1D1D6"
+    // Glass surfaces meet through this opaque seam.  It intentionally stays
+    // white in the light design so wallpaper never leaks through structural
+    // joins between the sidebar, title bar and content canvas.
+    readonly property color cupertinoSeam: cupertinoDark ? "#3A3A3C" : "#FFFFFF"
+    readonly property color cupertinoControlFill: cupertinoDark ? "#3A3A3C" : "#E8E8ED"
 
     onNetworkCacheMaximumMiBChanged:
         W.App.setNetworkCacheMaximumSize(networkCacheMaximumMiB * 1024 * 1024)
