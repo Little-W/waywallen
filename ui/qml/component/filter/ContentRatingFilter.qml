@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQml
 import QtQuick
 import waywallen.control as WC
+import waywallen.ui as W
 import Qcm.Material as MD
 
 // Content-rating rule. Single value matched against item.content_rating.
@@ -29,13 +30,13 @@ QtObject {
     }
 
     readonly property Component valueDelegate: Component {
-        MD.InputChip {
+        W.CupertinoInputChip {
             id: valueChip
             visible: root.condition !== WC.StringCondition.STRING_CONDITION_UNSPECIFIED
             text: root.value
             onClicked: valueMenu.open()
 
-            MD.Menu {
+            W.CupertinoMenu {
                 id: valueMenu
                 parent: valueChip
                 y: parent.height

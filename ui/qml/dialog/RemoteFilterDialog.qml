@@ -5,7 +5,7 @@ import QtQuick.Templates as T
 import waywallen.ui as W
 import Qcm.Material as MD
 
-MD.Dialog {
+W.CupertinoDialog {
     id: root
     title: qsTr("Filters")
     required property var popupWindow
@@ -194,7 +194,7 @@ MD.Dialog {
                             color: MD.Token.color.on_surface_variant
                             wrapMode: Text.WordWrap
                         }
-                        MD.ComboBox {
+                        W.CupertinoComboBox {
                             Layout.fillWidth: true
                             mdState.size: MD.Enum.S
                             popupMaximumHeight: 320
@@ -240,7 +240,7 @@ MD.Dialog {
 
                             Repeater {
                                 model: root.filterValues(filterRow.modelData)
-                                delegate: MD.FilterChip {
+                                delegate: W.CupertinoFilterChip {
                                     required property var modelData
                                     checkable: false
                                     text: modelData
@@ -286,7 +286,7 @@ MD.Dialog {
                             }
                         }
 
-                        MD.Switch {
+                        W.CupertinoSwitch {
                             id: toggleControl
                             checked: root.hasFilterValue(filterRow.modelData)
                             onClicked: {
@@ -300,11 +300,11 @@ MD.Dialog {
         }
     }
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: m_confirm
         title: root.confirmationFilter ? String(root.confirmationFilter.title ?? "") : ""
         modal: true
-        anchors.centerIn: T.Overlay.overlay
+        parent: T.Overlay.overlay
         standardButtons: T.Dialog.Cancel | T.Dialog.Ok
         onAccepted: {
             root.setFilterValues(root.confirmationFilter, root.filterValues(root.confirmationFilter).slice(0, 1));

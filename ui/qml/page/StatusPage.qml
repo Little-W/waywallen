@@ -6,7 +6,7 @@ import QtQuick.Templates as T
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     padding: 0
     showHeader: MD.MProp.size.isCompact
@@ -61,11 +61,11 @@ MD.Page {
         wrapMode: Text.WordWrap
     }
 
-    component SectionPane: MD.Pane {
+    component SectionPane: W.CupertinoPane {
         Layout.fillWidth: true
         radius: 16
         padding: 16
-        backgroundColor: MD.MProp.color.surface
+        backgroundColor: W.Global.cupertinoCard
     }
 
     W.HealthQuery {
@@ -164,7 +164,7 @@ MD.Page {
         }
     }
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: killDialog
         property string rendererId: ""
         property string label: ""
@@ -190,7 +190,7 @@ MD.Page {
         topMargin: 12
         leftMargin: 12
         rightMargin: 12
-        bottomMargin: 12
+        bottomMargin: Math.max(12, W.Global.compactNavigationInset)
 
         ColumnLayout {
             width: m_flick.contentWidth
@@ -227,15 +227,11 @@ MD.Page {
                             Layout.alignment: Qt.AlignVCenter
                             visible: label.length > 0
                             text: label
-                            bgColor: MD.Token.color.secondary_container
-                            fgColor: MD.Token.color.on_secondary_container
                         }
                         W.Tag {
                             Layout.alignment: Qt.AlignVCenter
                             visible: W.Notify.displayBackend.flatpakId.length > 0
                             text: "Flatpak"
-                            bgColor: MD.Token.color.tertiary_container
-                            fgColor: MD.Token.color.on_tertiary_container
                         }
                     }
 
@@ -280,7 +276,7 @@ MD.Page {
                             Layout.fillWidth: true
                         }
 
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             text: qsTr("Mute all")
                             checkable: false
                             checked: W.Notify.globalMuted
@@ -291,7 +287,7 @@ MD.Page {
                             }
                         }
 
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             text: qsTr("Pause all")
                             checkable: false
                             checked: W.Notify.globalPaused
@@ -302,7 +298,7 @@ MD.Page {
                             }
                         }
 
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             text: qsTr("Stop all")
                             checkable: false
                             checked: W.Notify.globalStopped

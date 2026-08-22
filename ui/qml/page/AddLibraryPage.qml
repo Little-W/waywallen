@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr("Add Library")
 
@@ -84,7 +84,7 @@ MD.Page {
 
                 Repeater {
                     model: sourceQuery.sources
-                    delegate: MD.FilterChip {
+                    delegate: W.CupertinoFilterChip {
                         required property var modelData
                         MD.ButtonGroup.group: pluginGroup
                         text: modelData.name

@@ -3,10 +3,11 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import Qcm.Material as MD
+import waywallen.ui as W
 
 // Multi-select tag picker. `selected` seeds the current selection on open;
 // edits are pending until Apply, which emits `commit(newTags)`.
-MD.Dialog {
+W.CupertinoDialog {
     id: control
 
     property var allTags: []
@@ -90,7 +91,7 @@ MD.Dialog {
                 spacing: 8
                 Repeater {
                     model: control.allTags
-                    delegate: MD.FilterChip {
+                    delegate: W.CupertinoFilterChip {
                         required property var modelData
                         checkable: false
                         text: modelData

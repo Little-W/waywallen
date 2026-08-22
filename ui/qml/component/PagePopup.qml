@@ -18,11 +18,11 @@ MD.Popup {
     readyForOpen: MD.Presentation.ready
     parent: T.Overlay.overlay
     width: Math.min(Math.max(400, implicitWidth), parent.width)
-    height: Math.min(implicitHeight, parent.height * 0.8)
+    height: Math.min(implicitHeight, parent.height - 32)
 
     mdState.textColor: MD.MProp.color.on_surface
-    mdState.backgroundColor: MD.MProp.color.surface
-    MD.MProp.backgroundColor: MD.MProp.color.surface
+    mdState.backgroundColor: W.Global.cupertinoCanvas
+    MD.MProp.backgroundColor: W.Global.cupertinoCanvas
 
     x: Math.round((parent.width - width) / 2)
     y: Math.round((parent.height - height) / 2)
@@ -36,7 +36,7 @@ MD.Popup {
         when: root.fillWidth
     }
 
-    radius: MD.MProp.size.isCompact ? 0 : MD.Token.shape.corner.large
+    radius: MD.MProp.size.isCompact ? 0 : 16
     modal: !MD.MProp.size.isCompact
 
     Binding {
@@ -45,6 +45,15 @@ MD.Popup {
         root.fillWidth: true
         root.padding: 0
         root.verticalPadding: 0
+    }
+
+    background: W.CupertinoSurface {
+        frosted: W.App.frostedGlassAvailable && !root.MD.MProp.size.isCompact
+        surfaceColor: W.Global.cupertinoCanvas
+        glassOpacity: 0.98
+        cornerRadius: root.radius
+        borderOpacity: root.MD.MProp.size.isCompact ? 0 : 0.10
+        elevation: MD.Token.elevation.level2
     }
 
     function acceptPage(request, operation) {
@@ -137,6 +146,7 @@ MD.Popup {
     MD.PageContext {
         id: m_page_context
         showHeader: true
+        showBackground: false
         backgroundRadius: root.radius
         radius: root.radius
         leadingAction: MD.Action {

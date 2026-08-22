@@ -6,7 +6,7 @@ import QtQuick.Templates as T
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr('Plugins')
     scrolling: !m_flick.atYBeginning
@@ -67,19 +67,23 @@ MD.Page {
     function updateTagBgColor(info) {
         const state = updateState(info);
         if (state === pluginUpdateStateAvailable)
-            return MD.Token.color.primary_container;
+            return Qt.rgba(W.Global.effectiveAccentColor.r,
+                           W.Global.effectiveAccentColor.g,
+                           W.Global.effectiveAccentColor.b,
+                           W.Global.cupertinoDark ? 0.28 : 0.14);
         if (state === pluginUpdateStateFailed || state === pluginUpdateStateUnsupported)
-            return MD.Token.color.error_container;
-        return MD.Token.color.secondary_container;
+            return Qt.rgba(MD.Token.color.error.r,
+                           MD.Token.color.error.g,
+                           MD.Token.color.error.b,
+                           W.Global.cupertinoDark ? 0.28 : 0.12);
+        return W.Global.cupertinoControlFill;
     }
 
     function updateTagFgColor(info) {
         const state = updateState(info);
         if (state === pluginUpdateStateFailed || state === pluginUpdateStateUnsupported)
-            return MD.Token.color.on_error_container;
-        if (state === pluginUpdateStateAvailable)
-            return MD.Token.color.on_primary_container;
-        return MD.Token.color.on_secondary_container;
+            return MD.Token.color.error;
+        return MD.Token.color.on_surface_variant;
     }
 
     actions: [
@@ -201,7 +205,7 @@ MD.Page {
     Component {
         id: inactiveDialogComponent
 
-        MD.Dialog {
+        W.CupertinoDialog {
             title: qsTr("Inactive plugins")
             horizontalPadding: 16
             implicitWidth: Math.min(440, parent ? parent.width - 48 : 440)
@@ -282,7 +286,7 @@ MD.Page {
         }
     }
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: installDialog
         title: inspectQuery.overwrite ? qsTr("Update plugin?") : qsTr("Install plugin?")
         parent: T.Overlay.overlay
@@ -429,7 +433,7 @@ MD.Page {
 
                     width: ListView.view.width
                     radius: 12
-                    mdState.backgroundColor: MD.Token.color.surface_container
+                    mdState.backgroundColor: W.Global.cupertinoCard
                     text: modelData.name || modelData.id || ""
                     supportText: modelData.id
                     leader: MD.Icon {

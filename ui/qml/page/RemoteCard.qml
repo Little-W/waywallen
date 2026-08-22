@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Qcm.Material as MD
+import waywallen.ui as W
 
 Item {
     id: root
@@ -20,9 +21,28 @@ Item {
     width: GridView.view ? GridView.view.cellWidth : 0
     height: GridView.view ? GridView.view.cellHeight : 0
 
-    readonly property int _radius: MD.Token.shape.corner.extra_small
+    readonly property int _radius: 12
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    readonly property bool gridMoving: GridView.view
+                                            ? (GridView.view.moving || GridView.view.flicking)
+                                            : false
+    // During the shell's snapshot transition the live grid is obscured.
+    // Pausing animated decoders avoids needless upload work without reducing
+    // the resolution of any still image or text.
+    readonly property bool sceneMoving: gridMoving || W.Global.sidebarAnimating
+    // Cache-buffer delegates are useful for image reuse but should not keep
+    // off-screen GIFs decoding.  Do not bind to contentY during a flick: all
+    // animations are paused then, and the expression only needs reevaluation
+    // once motion settles.
+    readonly property bool animationEnabled: !sceneMoving && GridView.view
+                                            ? root.y + root.height
+                                                > GridView.view.contentY
+                                                  - Math.max(48, GridView.view.cellHeight * 0.35)
+                                              && root.y
+                                                 < GridView.view.contentY + GridView.view.height
+                                                   + Math.max(48, GridView.view.cellHeight * 0.35)
+                                            : false
 
     Item {
         id: m_card
@@ -34,25 +54,20 @@ Item {
             id: m_cell
             anchors.fill: parent
             anchors.margins: 6
-            clip: true
 
-            AnimatedImage {
+            W.ThumbnailImage {
                 id: m_thumb
                 anchors.fill: parent
                 source: root.previewUrl
+                resource: ""
+                wpType: ""
                 fillMode: Image.PreserveAspectCrop
-                horizontalAlignment: Image.AlignHCenter
-                verticalAlignment: Image.AlignVCenter
-                smooth: true
-                cache: true
-                playing: true
-                asynchronous: true
-                onStatusChanged: if (status === AnimatedImage.Ready) playing = true
-                layer.enabled: true
-                layer.effect: MD.RoundClip {
-                    corners: MD.Util.corners(root._radius)
-                    size: Qt.vector2d(m_thumb.width, m_thumb.height)
-                }
+                radius: root._radius
+                // Keep browse thumbnails compact in GPU memory and avoid a
+                // source reload when the responsive grid changes width.
+                maximumSourceSize: 256
+                motionActive: root.sceneMoving
+                animationEnabled: root.animationEnabled
             }
 
             Rectangle {
@@ -77,6 +92,9 @@ Item {
                 text: root.title.length > 0 ? root.title : qsTr("Untitled")
                 typescale: MD.Token.typescale.title_small
                 color: "white"
+                font.weight: Font.DemiBold
+                style: Text.Outline
+                styleColor: Qt.rgba(0, 0, 0, 0.62)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
@@ -92,7 +110,7 @@ Item {
                 width: m_badge.implicitWidth + 12
                 height: m_badge.implicitHeight + 6
                 radius: height / 2
-                color: MD.Token.color.primary
+                color: W.Global.effectiveAccentColor
 
                 MD.Label {
                     id: m_badge

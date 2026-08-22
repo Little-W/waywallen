@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.BottomSheet {
+W.CupertinoFrostedBottomSheet {
     id: control
 
     required property Item popupParent
@@ -16,6 +16,12 @@ MD.BottomSheet {
     sheetType: MD.Enum.BottomSheetModal
     dismissOnDragDown: true
     maxSheetWidth: 560
+    mdState.backgroundColor: Qt.rgba(W.Global.cupertinoCard.r,
+                                     W.Global.cupertinoCard.g,
+                                     W.Global.cupertinoCard.b,
+                                     W.App.frostedGlassAvailable ? 0.94 : 1.0)
+    mdState.radius: 18
+    mdState.elevation: MD.Token.elevation.level1
 
     MD.Action {
         id: createPlaylistAction
@@ -29,6 +35,7 @@ MD.BottomSheet {
 
     ColumnLayout {
         width: control.sheetWidth
+        y: 8
         spacing: 0
 
         RowLayout {
@@ -52,7 +59,7 @@ MD.BottomSheet {
                 color: MD.Token.color.on_surface_variant
             }
 
-            MD.Switch {
+            W.CupertinoSwitch {
                 id: sharedSwitch
                 checked: control.sheetState.shareAllDisplays
                 onToggled: control.sheetState.setShareAllDisplays(checked)
@@ -66,7 +73,7 @@ MD.BottomSheet {
             Layout.bottomMargin: 8
             spacing: 8
 
-            MD.EmbedChip {
+            W.CupertinoEmbedChip {
                 id: playlistDisplayChip
 
                 Layout.maximumWidth: 280
@@ -77,7 +84,7 @@ MD.BottomSheet {
                 mdState.borderWidth: 1
                 onClicked: playlistDisplayMenu.open()
 
-                MD.Menu {
+                W.CupertinoMenu {
                     id: playlistDisplayMenu
                     parent: playlistDisplayChip
                     width: 280
@@ -151,7 +158,12 @@ MD.BottomSheet {
                 heightMode: playingDisplayLabels.length > 0 ? MD.Enum.ListItemThreeLine : MD.Enum.ListItemTwoLine
                 readonly property bool playingOnSelectedDisplay: control.sheetState.playlistIsPlayingOnSelectedDisplay(modelData)
                 readonly property var playingDisplayLabels: control.sheetState.playlistDisplayLabels(modelData)
-                mdState.backgroundColor: control.sheetState.isEditingPlaylist(modelData) ? MD.Token.color.primary_container : MD.Token.color.surface_container
+                mdState.backgroundColor: control.sheetState.isEditingPlaylist(modelData)
+                    ? Qt.rgba(W.Global.effectiveAccentColor.r,
+                              W.Global.effectiveAccentColor.g,
+                              W.Global.effectiveAccentColor.b,
+                              W.Global.cupertinoDark ? 0.28 : 0.14)
+                    : W.Global.cupertinoCard
 
                 below: Item {
                     implicitHeight: tagFlow.visible ? tagFlow.implicitHeight + 6 : 0
@@ -171,8 +183,6 @@ MD.BottomSheet {
                             W.Tag {
                                 required property var modelData
                                 text: modelData
-                                bgColor: MD.Token.color.secondary_container
-                                fgColor: MD.Token.color.on_secondary_container
                             }
                         }
                     }

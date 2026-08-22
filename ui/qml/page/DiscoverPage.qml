@@ -5,10 +5,13 @@ import QtQuick.Templates as T
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     showBackground: false
     padding: MD.MProp.size.isCompact ? 0 : 12
+    // Keep the live toolbar flush with the structural title bar in desktop
+    // mode; a transparent outer padding strip reads as a visible seam.
+    topPadding: 0
     rightPadding: 0
 
     property bool detailOpen: false
@@ -425,24 +428,56 @@ MD.Page {
     contentItem: RowLayout {
         spacing: 12
 
-        MD.Pane {
+        W.CupertinoPane {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
+            backgroundColor: W.Global.cupertinoCard
             showBackground: true
 
-            contentItem: ColumnLayout {
-                spacing: 0
+            contentItem: Item {
+                id: discoverGridArea
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 16
-                    Layout.rightMargin: 16
-                    Layout.topMargin: 4
-                    spacing: 8
+                clip: true
 
-                    MD.EmbedChip {
+                W.CupertinoFrostedBar {
+                    id: discoverTopBar
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: discoverProgress.visible ? 60 : 52
+                    z: 20
+                    blurSource: m_grid
+                    // Capture in the GridView viewport coordinate space.  Do
+                    // not add contentY here: ShaderEffectSource renders the
+                    // view itself, including its internal scroll transform.
+                    // The explicit sibling/parent offsets keep the backdrop
+                    // locked to this bar if either branch is later laid out
+                    // with an offset.
+                    blurSourceRect: Qt.rect(discoverTopBar.x
+                                            - discoverGridViewport.x - m_grid.x,
+                                            discoverTopBar.y
+                                            - discoverGridViewport.y - m_grid.y,
+                                            discoverTopBar.width,
+                                            discoverTopBar.height)
+                    surfaceColor: W.Global.cupertinoCard
+                    glassOpacity: 0.60
+                    // A dark 8 px internal shadow reads as a misplaced grey
+                    // band below this otherwise light material header.
+                    edgeShadowEnabled: false
+
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        height: 52
+                        spacing: 8
+
+                    W.CupertinoEmbedChip {
                         id: sourceChip
                         visible: availabilityQuery.sources.length > 1
                         text: root.sourceName(root.sourceId)
@@ -450,7 +485,7 @@ MD.Page {
                         mdState.borderWidth: 1
                         onClicked: sourceMenu.open()
 
-                        MD.Menu {
+                        W.CupertinoMenu {
                             id: sourceMenu
                             parent: sourceChip
                             y: parent.height
@@ -467,7 +502,7 @@ MD.Page {
                         }
                     }
 
-                    MD.EmbedChip {
+                    W.CupertinoEmbedChip {
                         id: sortChip
                         visible: root.sortOptions.length > 0
                         text: root.sortLabel()
@@ -475,7 +510,7 @@ MD.Page {
                         mdState.borderWidth: 1
                         onClicked: sortMenu.open()
 
-                        MD.Menu {
+                        W.CupertinoMenu {
                             id: sortMenu
                             parent: sortChip
                             y: parent.height
@@ -506,30 +541,53 @@ MD.Page {
                     }
                 }
 
-                MD.LinearIndicator {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 16
-                    Layout.rightMargin: 16
-                    visible: searchQuery.querying && searchQuery.model.count > 0
-                    running: visible
+                    MD.LinearIndicator {
+                        id: discoverProgress
+
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        anchors.bottomMargin: 4
+                        visible: searchQuery.querying && searchQuery.model.count > 0
+                        running: visible
+                    }
                 }
 
                 Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    id: discoverGridViewport
+
+                    anchors.fill: parent
 
                     MD.VerticalGridView {
                         id: m_grid
                         anchors.fill: parent
                         clip: true
-                        cacheBuffer: 300
-                        displayMarginBeginning: 300
-                        displayMarginEnd: 300
+                        // Preload just over one row.  Large display margins
+                        // keep GIF delegates alive even though users cannot
+                        // see them during a scroll.
+                        cacheBuffer: Math.max(96, Math.ceil(cellHeight * 1.25))
+                        displayMarginBeginning: 0
+                        displayMarginEnd: 0
                         currentIndex: -1
-                        topMargin: 2
-                        bottomMargin: 8
+                        topMargin: discoverTopBar.height + 8
+                        bottomMargin: Math.max(8, W.Global.compactNavigationInset)
                         leftMargin: 8
                         rightMargin: 8
+
+                        // Keep the interactive scroll bar out of the compact
+                        // navigation overlay while cards continue below the
+                        // live frosted material.
+                        T.ScrollBar.vertical: MD.ScrollBar {
+                            parent: discoverGridViewport
+                            anchors.top: m_grid.top
+                            anchors.right: m_grid.right
+                            anchors.bottom: m_grid.bottom
+                            anchors.topMargin: discoverTopBar.height + 8
+                            anchors.bottomMargin: W.Global.compactNavigationInset
+                            z: 19
+                        }
 
                         readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
                         readonly property int _cols: Math.max(1, Math.floor(_availableWidth / root.discoverTweakState.itemSize))
@@ -559,11 +617,11 @@ MD.Page {
                                 z: 2
                                 Rectangle {
                                     anchors.fill: parent
-                                    anchors.margins: 4
+                                    anchors.margins: 6
                                     color: "transparent"
-                                    border.color: MD.Token.color.primary
-                                    border.width: 3
-                                    radius: MD.Token.shape.corner.small + 2
+                                    border.color: W.Global.effectiveAccentColor
+                                    border.width: 2
+                                    radius: 12
                                 }
                             }
                         }
@@ -648,13 +706,14 @@ MD.Page {
             }
         }
 
-        MD.Pane {
+        W.CupertinoPane {
             Layout.preferredWidth: root.detailRow !== null ? 280 : 0
             Layout.maximumWidth: 280
             Layout.fillHeight: true
             visible: root.detailRow !== null
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
+            backgroundColor: W.Global.cupertinoCard
             showBackground: true
 
             contentItem: RemoteDetailPanel {
@@ -687,6 +746,7 @@ MD.Page {
 
         W.TweakSheet {
             popupParent: root
+            blurSource: root.contentItem
             tweak: root.discoverTweakState
         }
     }

@@ -6,7 +6,7 @@ import waywallen.control as WC
 import waywallen.ui as W
 import Qcm.Material as MD
 
-MD.Dialog {
+W.CupertinoDialog {
     id: root
     title: qsTr("Filters")
     required property var popupWindow
@@ -94,7 +94,7 @@ MD.Dialog {
                     spacing: 8
                     Repeater {
                         model: root.supportedTypes
-                        delegate: MD.FilterChip {
+                        delegate: W.CupertinoFilterChip {
                             required property var modelData
                             checkable: false
                             text: qsTr(modelData)
@@ -155,7 +155,7 @@ MD.Dialog {
                     spacing: 8
                     Repeater {
                         model: ratingListQuery.ratings
-                        delegate: MD.FilterChip {
+                        delegate: W.CupertinoFilterChip {
                             required property var modelData
                             checkable: false
                             text: modelData

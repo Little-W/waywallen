@@ -7,7 +7,7 @@ import Qcm.Material as MD
 import waywallen.control as WC
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     padding: 0
     showHeader: true
@@ -24,7 +24,7 @@ MD.Page {
         }
     ]
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: resetSettingsDialog
         parent: T.Overlay.overlay
         modal: true
@@ -63,7 +63,7 @@ MD.Page {
 
         Layout.fillWidth: true
         implicitHeight: settingContent.implicitHeight + 16
-        color: MD.Token.color.surface_container
+        color: W.Global.cupertinoCard
 
         readonly property real radiusBig: 16
 
@@ -488,7 +488,7 @@ MD.Page {
                         text: qsTr("Language")
                     }
 
-                    MD.ComboBox {
+                    W.CupertinoComboBox {
                         id: m_ui_language
                         Layout.preferredWidth: 180
                         mdState.size: MD.Enum.S
@@ -532,7 +532,7 @@ MD.Page {
                         }
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_sidebar_auto_expand
                         checked: W.Global.sidebarAutoExpand
                         onToggled: W.Global.sidebarAutoExpand = checked
@@ -554,7 +554,7 @@ MD.Page {
                         text: qsTr("Start at login")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_autostart
                         enabled: !autostartGetQ.querying && !autostartSetQ.querying
                         onClicked: {
@@ -595,7 +595,7 @@ MD.Page {
                         }
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_hide_tray_icon
                         onToggled: root._mut(g => {
                             g.hideTrayIcon = checked;
@@ -622,7 +622,7 @@ MD.Page {
                         text: qsTr("Allow duplicate renderers")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_duplicate_renderers
                         onToggled: root._mut(g => {
                             g.duplicateRenderers = checked;
@@ -649,7 +649,7 @@ MD.Page {
                         text: qsTr("Mouse forwarding")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_pointer_forwarding
                         onToggled: root._mut(g => {
                             g.pointerForwardingEnabled = checked;
@@ -676,7 +676,7 @@ MD.Page {
                         text: qsTr("Plugin update notifications")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_plugin_update_notifications
                         onToggled: root._mut(g => {
                             g.pluginUpdateNotifications = checked;
@@ -711,7 +711,7 @@ MD.Page {
                             text: autoReplayItem.modelData.label
                         }
 
-                        MD.ComboBox {
+                        W.CupertinoComboBox {
                             id: autoReplayActionBox
                             Layout.preferredWidth: 180
                             mdState.size: MD.Enum.S
@@ -746,7 +746,7 @@ MD.Page {
                         text: qsTr("Blur while paused")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_pause_effect_enabled
                         onToggled: root._mutPauseEffect(config => {
                             config.kind = checked
@@ -821,7 +821,7 @@ MD.Page {
                         text: qsTr("Enable audio")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_renderer_enable_audio
                         onToggled: root._mut(g => {
                             g["renderer.enable_audio"] = checked;
@@ -848,7 +848,7 @@ MD.Page {
                         text: qsTr("Enable audio capture")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_audio_capture_enabled
                         onToggled: root._mut(g => {
                             g.audioCaptureEnabled = checked;
@@ -916,7 +916,7 @@ MD.Page {
                         text: qsTr("Mute for other active playback streams")
                     }
 
-                    MD.Switch {
+                    W.CupertinoSwitch {
                         id: m_mute_when_other_audio
                         onToggled: root._mut(g => {
                             g.muteWhenOtherAudio = checked;
@@ -986,7 +986,7 @@ MD.Page {
                         text: qsTr("Queue mode")
                     }
 
-                    MD.ComboBox {
+                    W.CupertinoComboBox {
                         id: m_queue_box
                         Layout.preferredWidth: 180
                         mdState.size: MD.Enum.S
@@ -1055,7 +1055,7 @@ MD.Page {
                     .arg(root.formatBytes(W.App.networkCacheSize))
                     .arg(root.formatBytes(W.App.networkCacheMaximumSize))
                 corners: MD.Util.listCorners(index, count, 16)
-                mdState.backgroundColor: MD.Token.color.surface_container
+                mdState.backgroundColor: W.Global.cupertinoCard
 
                 trailing: MD.Button {
                     text: qsTr("Clear")
@@ -1076,7 +1076,7 @@ MD.Page {
                 showDivider: false
                 text: qsTr("Maximum cache size")
                 corners: MD.Util.listCorners(index, count, 16)
-                mdState.backgroundColor: MD.Token.color.surface_container
+                mdState.backgroundColor: W.Global.cupertinoCard
 
                 below: W.ValueSlider {
                     id: m_cache_maximum_slider

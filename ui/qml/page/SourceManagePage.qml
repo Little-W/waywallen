@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr("Library Manager")
 
@@ -43,9 +43,9 @@ MD.Page {
                 readonly property string fullPath: String(modelData.path || "")
 
                 width: m_view.contentWidth
-                radius: 8
+                radius: 12
 
-                mdState.backgroundColor: MD.Token.color.surface_container
+                mdState.backgroundColor: W.Global.cupertinoCard
 
                 text: fullPath
                 wrapMode: Text.Wrap

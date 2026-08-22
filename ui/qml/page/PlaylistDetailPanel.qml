@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Qcm.Material as MD
+import waywallen.ui as W
 
 ColumnLayout {
     id: control
@@ -16,7 +17,7 @@ ColumnLayout {
         color: MD.Token.color.on_surface_variant
     }
 
-    component SectionPane: MD.Pane {
+    component SectionPane: W.CupertinoPane {
         Layout.fillWidth: true
         padding: 0
         showBackground: false
@@ -93,7 +94,7 @@ ColumnLayout {
 
                         FieldLabel { text: qsTr("Mode") }
 
-                        MD.ComboBox {
+                        W.CupertinoComboBox {
                             Layout.fillWidth: true
                             mdState.size: MD.Enum.S
                             enabled: control.canMutate()

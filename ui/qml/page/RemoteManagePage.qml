@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr("Manage %1").arg(displayName.length > 0 ? displayName : sourceId)
     showHeader: true
@@ -243,8 +243,13 @@ MD.Page {
                     Layout.fillWidth: true
                     visible: root.hasAccountControls
                     implicitHeight: accountColumn.implicitHeight + 24
-                    color: MD.Token.color.surface_container
+                    color: W.Global.cupertinoCard
                     radius: 16
+                    border.width: 1
+                    border.color: Qt.rgba(W.Global.cupertinoBorder.r,
+                                          W.Global.cupertinoBorder.g,
+                                          W.Global.cupertinoBorder.b,
+                                          0.10)
 
                     ColumnLayout {
                         id: accountColumn
@@ -354,7 +359,7 @@ MD.Page {
                         Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: settingField.implicitHeight + 16
-                            color: MD.Token.color.surface_container
+                            color: W.Global.cupertinoCard
 
                             readonly property real radiusBig: 16
                             topLeftRadius: settingGroupItem.modelData.first ? radiusBig : 0

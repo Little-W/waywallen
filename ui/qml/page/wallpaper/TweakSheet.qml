@@ -5,7 +5,7 @@ import QtQuick.Templates as T
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.BottomSheet {
+W.CupertinoFrostedBottomSheet {
     id: control
 
     required property Item popupParent
@@ -15,12 +15,19 @@ MD.BottomSheet {
     anchors.fill: parent
     z: 25
     sheetType: MD.Enum.BottomSheetModal
-    dim: false
+    dim: true
     dismissOnDragDown: true
     maxSheetWidth: 560
+    mdState.backgroundColor: Qt.rgba(W.Global.cupertinoCard.r,
+                                     W.Global.cupertinoCard.g,
+                                     W.Global.cupertinoCard.b,
+                                     W.App.frostedGlassAvailable ? 0.94 : 1.0)
+    mdState.radius: 18
+    mdState.elevation: MD.Token.elevation.level1
 
     ColumnLayout {
         width: control.sheetWidth
+        y: 8
         spacing: 0
 
         ColumnLayout {

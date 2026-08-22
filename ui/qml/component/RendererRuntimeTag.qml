@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Qcm.Material as MD
+import waywallen.ui as W
 
 Tag {
     id: root
@@ -13,8 +14,8 @@ Tag {
 
     implicitWidth: Math.min(textItem.implicitWidth + 16, 160)
     text: fullText
-    bgColor: MD.Token.color.secondary_container
-    fgColor: MD.Token.color.on_secondary_container
+    bgColor: W.Global.cupertinoControlFill
+    fgColor: MD.Token.color.on_surface_variant
 
     textItem.width: Math.max(0, root.width - 16)
     textItem.elide: Text.ElideRight

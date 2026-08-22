@@ -2,8 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Qcm.Material as MD
+import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr("Remote info")
     scrolling: !infoFlick.atYBeginning

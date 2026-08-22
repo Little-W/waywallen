@@ -536,6 +536,7 @@ Item {
                     resource: root.wp?.resource ?? ""
                     wpType: root.wp?.wpType ?? ""
                     fillMode: Image.PreserveAspectFit
+                    radius: 12
                 }
 
                 MD.Text {
@@ -774,7 +775,7 @@ Item {
                                 color: MD.Token.color.on_surface_variant
                             }
 
-                            MD.ComboBox {
+                            W.CupertinoComboBox {
                                 Layout.fillWidth: true
                                 mdState.size: MD.Enum.S
                                 model: root.kFillModeLabels
@@ -992,7 +993,7 @@ Item {
                     onLinkActivated: link => MD.Util.openUrlExternally(link)
                 }
 
-                MD.Switch {
+                W.CupertinoSwitch {
                     id: m_switch
                     visible: m_prop_delegate.type === "bool"
                     onToggled: propertyModel.setValue(m_prop_delegate.key, checked ? "true" : "false")
@@ -1047,7 +1048,7 @@ Item {
                     value: W.Util.colorFromWire(m_prop_delegate.currentValue)
                 }
 
-                MD.ComboBox {
+                W.CupertinoComboBox {
                     id: m_combo
                     visible: m_prop_delegate.type === "combo" && m_prop_delegate.supported
                     Layout.fillWidth: true
@@ -1125,7 +1126,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: 6
 
-                    MD.FilterChip {
+                    W.CupertinoFilterChip {
                         text: qsTr("All")
                         checked: root.isTargetAll()
                         onClicked: root.applyTargetKeys = []
@@ -1133,7 +1134,7 @@ Item {
 
                     Repeater {
                         model: W.App.displayManager.canvases
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             required property var modelData
                             visible: !!modelData?.hasLiveDisplays
                             width: visible ? Math.min(implicitWidth, 240) : 0
@@ -1148,7 +1149,7 @@ Item {
 
                     Repeater {
                         model: root.applyDisplayTargets
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             required property var modelData
                             visible: !!modelData?.selectableTarget
                             width: visible ? Math.min(implicitWidth, 220) : 0
@@ -1177,7 +1178,7 @@ Item {
                     spacing: 6
                     Repeater {
                         model: root.rendererCandidates
-                        MD.FilterChip {
+                        W.CupertinoFilterChip {
                             required property var modelData
                             required property int index
                             text: modelData?.name || ""

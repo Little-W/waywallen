@@ -7,7 +7,7 @@ import waywallen.ui as W
 
 // Renderer/plugin settings hosted inside PagePopup. Props are an open-time
 // snapshot; edits stay pending until Apply.
-MD.Page {
+W.CupertinoPage {
     id: root
     title: qsTr("Configure %1").arg(displayName.length > 0 ? displayName : pluginName)
     scrolling: !settingsList.atYBeginning
@@ -300,7 +300,7 @@ MD.Page {
             required property var modelData
             width: settingsList.contentWidth
             implicitHeight: fieldCol.implicitHeight + 16
-            color: MD.Token.color.surface_container
+            color: W.Global.cupertinoCard
 
             readonly property real radiusBig: 16
             readonly property bool roundTop: modelData.position === "single" || modelData.position === "first"

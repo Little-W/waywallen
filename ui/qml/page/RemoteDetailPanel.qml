@@ -110,6 +110,7 @@ Item {
                     visible: String(root.item?.previewUrl ?? "").length > 0
                     source: root.item?.previewUrl ?? ""
                     fillMode: Image.PreserveAspectFit
+                    radius: 12
                 }
 
                 MD.Text {

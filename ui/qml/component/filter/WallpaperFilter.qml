@@ -97,13 +97,13 @@ MD.ItemDelegate {
             Layout.fillWidth: true
             spacing: 12
 
-            MD.InputChip {
+            W.CupertinoInputChip {
                 id: nameChip
                 text: root.currentOption ? root.currentOption.name : qsTr("Filter")
                 onClicked: typeMenu.open()
             }
 
-            MD.InputChip {
+            W.CupertinoInputChip {
                 id: conditionChip
                 text: {
                     const spec = root.currentSpec;
@@ -112,7 +112,7 @@ MD.ItemDelegate {
                 }
                 onClicked: conditionMenu.open()
 
-                MD.Menu {
+                W.CupertinoMenu {
                     id: conditionMenu
                     parent: conditionChip
                     y: parent.height
@@ -155,10 +155,10 @@ MD.ItemDelegate {
             return MD.Util.listCorners(model.rowIndexInGroup(root.index),
                                        model.rowCountInGroupOf(root.index), 12);
         }
-        color: root.MD.MProp.color.surface
+        color: W.Global.cupertinoCard
     }
 
-    MD.Menu {
+    W.CupertinoMenu {
         id: typeMenu
         parent: root
         y: root.contentItem.y + root.contentItem.height

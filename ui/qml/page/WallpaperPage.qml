@@ -8,7 +8,7 @@ import Qcm.Material as MD
 import waywallen.control as WC
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
 
     W.WallpaperListQuery {
@@ -1015,178 +1015,232 @@ MD.Page {
 
     showBackground: false
     padding: MD.MProp.size.isCompact ? 0 : 12
+    // The collection toolbar is a continuation of the structural title bar,
+    // not a floating card.  Keep their junction fully covered in desktop
+    // mode instead of exposing the page's transparent top padding.
+    topPadding: 0
 
     contentItem: RowLayout {
         spacing: 12
 
         // --- Left: wallpaper grid ---
-        MD.Pane {
+        W.CupertinoPane {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
+            backgroundColor: W.Global.cupertinoCard
             showBackground: true
 
-            contentItem: ColumnLayout {
-                spacing: 0
+            contentItem: Item {
+                id: wallpaperGridArea
 
-                // Toolbar
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 16
-                    Layout.rightMargin: 16
-                    Layout.topMargin: 4
-                    spacing: 8
+                clip: true
 
-                    MD.EmbedChip {
-                        id: sortChip
-                        text: root.sortOptions[root.sortIndex].name
-                        trailingIconName: root.sortAsc ? MD.Token.icon.arrow_downward : MD.Token.icon.arrow_upward
-                        mdState.borderWidth: 1
-                        onClicked: sortMenu.open()
+                // Keep the grid as the base layer.  The toolbar below samples
+                // only its own strip so thumbnails can scroll behind a real,
+                // low-transparency frosted header without an expensive
+                // full-page blur effect.
+                MD.VerticalGridView {
+                    id: m_grid_view
 
-                        MD.Menu {
-                            id: sortMenu
-                            parent: sortChip
-                            y: parent.height
-                            model: root.sortOptions
-                            contentDelegate: MD.MenuItem {
-                                required property var modelData
-                                required property int index
-                                text: modelData.name
-                                icon.name: index === root.sortIndex ? (root.sortAsc ? MD.Token.icon.arrow_downward : MD.Token.icon.arrow_upward) : ' '
-                                onClicked: {
-                                    root.pickSort(index);
-                                    sortMenu.close();
-                                }
-                            }
+                    anchors.fill: parent
+                    clip: true
+                    focus: true
+                    focusPolicy: Qt.StrongFocus
+                    keyNavigationEnabled: true
+                    keyNavigationWraps: true
+                    currentIndex: -1
+                    highlightRangeMode: GridView.NoHighlightRange
+                    // Keep one decoded row ready without activating a large
+                    // ring of off-screen animated previews.
+                    cacheBuffer: Math.max(96, Math.ceil(cellHeight * 1.25))
+                    displayMarginBeginning: 0
+                    displayMarginEnd: 0
+                    topMargin: wallpaperTopBar.height + 8
+                    bottomMargin: Math.max(root.selectionActionSheetActive
+                                           ? root.selectionSheetReserve : 8,
+                                           W.Global.compactNavigationInset)
+                    leftMargin: 8
+                    rightMargin: 8
+
+                    // The grid flows under the compact glass navigation, but
+                    // its scroll bar stops at the mask's upper edge so the
+                    // handle stays reachable at the end of the list.
+                    T.ScrollBar.vertical: MD.ScrollBar {
+                        parent: wallpaperGridArea
+                        anchors.top: m_grid_view.top
+                        anchors.right: m_grid_view.right
+                        anchors.bottom: m_grid_view.bottom
+                        anchors.topMargin: wallpaperTopBar.height + 8
+                        anchors.bottomMargin: Math.max(W.Global.compactNavigationInset,
+                                                       root.selectionActionSheetActive
+                                                       ? root.selectionSheetReserve : 0)
+                        z: 19
+                    }
+
+                    visible: m_grid_view.count > 0
+
+                    readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
+                    readonly property int _cols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
+                    readonly property real _stretchedItemWidth: _availableWidth / _cols
+                    readonly property bool _fillCell: wallpaperTweakState.layoutMode === wallpaperTweakState.layoutFillCell
+                    readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(wallpaperTweakState.itemSize, _stretchedItemWidth)
+                    readonly property real _displayItemHeight: _displayItemWidth / Math.max(wallpaperTweakState.itemAspectRatio, 0.1)
+                    cellWidth: _stretchedItemWidth
+                    cellHeight: _fillCell ? _displayItemHeight : wallpaperTweakState.itemHeight
+
+                    model: wallpaperQuery.data
+
+                    delegate: WallpaperCard {
+                        selected: model.selected ?? false
+                        itemWidth: m_grid_view._displayItemWidth
+                        itemHeight: m_grid_view._displayItemHeight
+                        onClicked: modifiers => root.handleWallpaperClick(index, modifiers)
+                        onSelectionRequested: modifiers => root.requestWallpaperSelection(index)
+                    }
+
+                    Keys.onEscapePressed: event => {
+                        if (root.selectionActive) {
+                            root.clearWallpaperSelection();
+                            event.accepted = true;
                         }
                     }
 
-                    // Free-text search → wallpaperQuery.searchText.
-                    // SearchChip debounces internally so this fires
-                    // 1s after the user stops typing. Daemon-side
-                    // the value becomes an extra `name CONTAINS`
-                    // filter rule in its own group.
-                    W.SearchChip {
-                        id: m_search_field
-                        Layout.preferredWidth: 120
-                        placeholderText: qsTr("Search")
-                        onTextEdited: wallpaperQuery.searchText = text
-                    }
-
-                    MD.ActionToolBar {
-                        id: wallpaperActionToolBar
-                        Layout.fillWidth: true
-                        actions: [playlistListAction, tweakAction, filterAction, sourcesAction, refreshAction]
+                    highlightFollowsCurrentItem: true
+                    highlight: Component {
+                        Item {
+                            visible: m_grid_view.currentItem !== null
+                            z: 2
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                color: "transparent"
+                                border.color: W.Global.effectiveAccentColor
+                                border.width: 2
+                                radius: 12
+                            }
+                        }
                     }
                 }
 
-                // Horizontal scan-progress strip below the toolbar.
-                // Only shown when the grid has wallpapers to display
-                // (the empty-state path uses the centered BusyIndicator).
-                MD.LinearIndicator {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 16
-                    Layout.rightMargin: 16
-                    Layout.topMargin: 4
-                    visible: m_grid_view.count > 0 && W.Notify.scanInProgress
-                    running: visible
-                }
+                W.CupertinoFrostedBar {
+                    id: wallpaperTopBar
 
-                // Grid + centered empty-state overlay
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: scanProgress.visible ? 60 : 52
+                    z: 20
+                    blurSource: m_grid_view
+                    // ShaderEffectSource consumes the GridView viewport, not
+                    // its moving contentItem.  Keep this mapping in viewport
+                    // coordinates so scrolling does not apply contentY a
+                    // second time and geometry changes cannot shift the
+                    // material vertically.
+                    blurSourceRect: Qt.rect(wallpaperTopBar.x - m_grid_view.x,
+                                            wallpaperTopBar.y - m_grid_view.y,
+                                            wallpaperTopBar.width,
+                                            wallpaperTopBar.height)
+                    surfaceColor: W.Global.cupertinoCard
+                    glassOpacity: 0.60
+                    edgeShadowEnabled: false
 
-                    MD.VerticalGridView {
-                        id: m_grid_view
-                        anchors.fill: parent
-                        clip: true
-                        focus: true
-                        focusPolicy: Qt.StrongFocus
-                        keyNavigationEnabled: true
-                        keyNavigationWraps: true
-                        currentIndex: -1
-                        highlightRangeMode: GridView.NoHighlightRange
-                        cacheBuffer: 300
-                        displayMarginBeginning: 300
-                        displayMarginEnd: 300
-                        topMargin: 2
-                        bottomMargin: root.selectionActionSheetActive ? root.selectionSheetReserve : 8
-                        leftMargin: 8
-                        rightMargin: 8
-                        visible: m_grid_view.count > 0
-
-                        readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
-                        readonly property int _cols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
-                        readonly property real _stretchedItemWidth: _availableWidth / _cols
-                        readonly property bool _fillCell: wallpaperTweakState.layoutMode === wallpaperTweakState.layoutFillCell
-                        readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(wallpaperTweakState.itemSize, _stretchedItemWidth)
-                        readonly property real _displayItemHeight: _displayItemWidth / Math.max(wallpaperTweakState.itemAspectRatio, 0.1)
-                        cellWidth: _stretchedItemWidth
-                        cellHeight: _fillCell ? _displayItemHeight : wallpaperTweakState.itemHeight
-
-                        model: wallpaperQuery.data
-
-                        delegate: WallpaperCard {
-                            selected: model.selected ?? false
-                            itemWidth: m_grid_view._displayItemWidth
-                            itemHeight: m_grid_view._displayItemHeight
-                            onClicked: modifiers => root.handleWallpaperClick(index, modifiers)
-                            onSelectionRequested: modifiers => root.requestWallpaperSelection(index)
-                        }
-
-                        Keys.onEscapePressed: event => {
-                            if (root.selectionActive) {
-                                root.clearWallpaperSelection();
-                                event.accepted = true;
-                            }
-                        }
-
-                        highlightFollowsCurrentItem: true
-                        highlight: Component {
-                            Item {
-                                visible: m_grid_view.currentItem !== null
-                                z: 2
-                                // Inset 2 = 6 (card margin) − 4 (ring outset),
-                                // so the ring sits 4px outside the image
-                                // control with the same concentric radius.
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: 2
-                                    color: "transparent"
-                                    border.color: MD.Token.color.primary
-                                    border.width: 3
-                                    radius: MD.Token.shape.corner.extra_small + 4
-                                }
-                            }
-                        }
-                    }
-
-                    MD.Button {
-                        id: cancelSelectionButton
+                    // Toolbar
+                    RowLayout {
                         anchors.left: parent.left
+                        anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.leftMargin: 16
-                        anchors.topMargin: 12
-                        z: 10
-                        visible: root.selectionActive
-                        checked: true
-                        text: String(root.selectedWallpaperCount)
-                        icon.name: MD.Token.icon.close
-                        mdState.type: MD.Enum.BtElevated
-                        onClicked: root.clearWallpaperSelection()
+                        anchors.rightMargin: 16
+                        height: 52
+                        spacing: 8
+
+                        W.CupertinoEmbedChip {
+                            id: sortChip
+                            text: root.sortOptions[root.sortIndex].name
+                            trailingIconName: root.sortAsc ? MD.Token.icon.arrow_downward : MD.Token.icon.arrow_upward
+                            mdState.borderWidth: 1
+                            onClicked: sortMenu.open()
+
+                            W.CupertinoMenu {
+                                id: sortMenu
+                                parent: sortChip
+                                y: parent.height
+                                model: root.sortOptions
+                                contentDelegate: MD.MenuItem {
+                                    required property var modelData
+                                    required property int index
+                                    text: modelData.name
+                                    icon.name: index === root.sortIndex ? (root.sortAsc ? MD.Token.icon.arrow_downward : MD.Token.icon.arrow_upward) : ' '
+                                    onClicked: {
+                                        root.pickSort(index);
+                                        sortMenu.close();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Free-text search → wallpaperQuery.searchText.
+                        // SearchChip debounces internally so this fires
+                        // 1s after the user stops typing. Daemon-side
+                        // the value becomes an extra `name CONTAINS`
+                        // filter rule in its own group.
+                        W.SearchChip {
+                            id: m_search_field
+                            Layout.preferredWidth: 120
+                            placeholderText: qsTr("Search")
+                            onTextEdited: wallpaperQuery.searchText = text
+                        }
+
+                        MD.ActionToolBar {
+                            id: wallpaperActionToolBar
+                            Layout.fillWidth: true
+                            actions: [playlistListAction, tweakAction, filterAction, sourcesAction, refreshAction]
+                        }
                     }
 
-                    MD.Loader {
-                        anchors.centerIn: parent
-                        active: m_grid_view.count === 0
-                        sourceComponent: m_load_comp
-                    }
+                    // Horizontal scan-progress strip below the toolbar.
+                    // Only shown when the grid has wallpapers to display
+                    // (the empty-state path uses the centered BusyIndicator).
+                    MD.LinearIndicator {
+                        id: scanProgress
 
-                    Component {
-                        id: m_load_comp
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        anchors.bottomMargin: 4
+                        visible: m_grid_view.count > 0 && W.Notify.scanInProgress
+                        running: visible
+                    }
+                }
+
+                MD.Button {
+                    id: cancelSelectionButton
+
+                    anchors.left: parent.left
+                    anchors.top: wallpaperTopBar.bottom
+                    anchors.leftMargin: 16
+                    anchors.topMargin: 12
+                    z: 21
+                    visible: root.selectionActive
+                    checked: true
+                    text: String(root.selectedWallpaperCount)
+                    icon.name: MD.Token.icon.close
+                    mdState.type: MD.Enum.BtElevated
+                    onClicked: root.clearWallpaperSelection()
+                }
+
+                MD.Loader {
+                    anchors.centerIn: parent
+                    active: m_grid_view.count === 0
+                    sourceComponent: m_load_comp
+                }
+
+                Component {
+                    id: m_load_comp
 
                         ColumnLayout {
                             spacing: 16
@@ -1240,16 +1294,16 @@ MD.Page {
                     }
                 }
             }
-        }
 
         // --- Right: wallpaper detail panel ---
-        MD.Pane {
+        W.CupertinoPane {
             Layout.preferredWidth: root.selectedWallpaper !== null && !root.selectionActive ? 280 : 0
             Layout.fillHeight: true
             Layout.maximumWidth: 280
             visible: root.selectedWallpaper !== null && !root.selectionActive
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
+            backgroundColor: W.Global.cupertinoCard
             showBackground: true
 
             contentItem: WallpaperDetailPanel {
@@ -1266,6 +1320,7 @@ MD.Page {
 
         W.SelectSheet {
             popupParent: root
+            blurSource: root.contentItem
             relay: wallpaperSelectSheetRelay
             currentWallpaperSelect: root.currentWallpaperSelect
         }
@@ -1276,6 +1331,7 @@ MD.Page {
 
         W.TweakSheet {
             popupParent: root
+            blurSource: root.contentItem
             tweak: wallpaperTweakState
         }
     }
@@ -1285,6 +1341,7 @@ MD.Page {
 
         W.PlaylistListSheet {
             popupParent: root
+            blurSource: root.contentItem
             sheetState: playlistListSheetState
         }
     }

@@ -192,7 +192,7 @@ ColumnLayout {
         id: boolField
         RowLayout {
             spacing: 8
-            MD.Switch {
+            W.CupertinoSwitch {
                 id: sw
                 checked: root.value === "true"
                 onToggled: root._emit(checked ? "true" : "false")
@@ -297,7 +297,7 @@ ColumnLayout {
 
     Component {
         id: choiceField
-        MD.ComboBox {
+        W.CupertinoComboBox {
             id: cb
             mdState.size: MD.Enum.S
             model: root.schema.choices
@@ -331,7 +331,7 @@ ColumnLayout {
 
             Repeater {
                 model: root.resolutionPresets
-                delegate: MD.FilterChip {
+                delegate: W.CupertinoFilterChip {
                     id: resChip
                     required property var modelData
                     readonly property int modelValue: parseInt(modelData.value, 10)
@@ -365,7 +365,7 @@ ColumnLayout {
 
             Component.onCompleted: gpuScan.reload()
 
-            MD.FilterChip {
+            W.CupertinoFilterChip {
                 id: autoChip
                 text: qsTr("Auto (recommended)")
                 checked: root.value === ""
@@ -389,7 +389,7 @@ ColumnLayout {
 
             Repeater {
                 model: W.App.gpuManager ? W.App.gpuManager.gpus : []
-                delegate: MD.FilterChip {
+                delegate: W.CupertinoFilterChip {
                     id: gpuChip
                     required property var modelData
                     text: {

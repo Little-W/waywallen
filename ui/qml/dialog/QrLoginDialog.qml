@@ -9,6 +9,17 @@ import waywallen.ui as W
 MD.Popup {
     id: root
 
+    mdState.backgroundColor: W.Global.cupertinoCard
+    MD.MProp.backgroundColor: W.Global.cupertinoCard
+    background: W.CupertinoSurface {
+        frosted: W.App.frostedGlassAvailable
+        surfaceColor: W.Global.cupertinoCard
+        glassOpacity: 0.98
+        cornerRadius: 18
+        borderOpacity: 0.10
+        elevation: MD.Token.elevation.level2
+    }
+
     property string sessionId: ""
     property string pluginId: ""
     property string actionId: ""
@@ -112,6 +123,12 @@ MD.Popup {
             color: "white"
             implicitWidth: 280
             implicitHeight: 280
+            radius: 12
+            border.width: 1
+            border.color: Qt.rgba(W.Global.cupertinoBorder.r,
+                                  W.Global.cupertinoBorder.g,
+                                  W.Global.cupertinoBorder.b,
+                                  0.55)
 
             Image {
                 anchors.centerIn: parent

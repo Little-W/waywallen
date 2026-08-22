@@ -6,7 +6,7 @@ import waywallen.ui as W
 // Full settings page used by the display details' quick wallpaper entry.
 // Keeping it in a PagePopup lets the user return to the selected display
 // without changing the wallpaper library selection.
-MD.Page {
+W.CupertinoPage {
     id: root
 
     title: qsTr("Wallpaper settings")

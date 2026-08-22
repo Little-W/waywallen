@@ -21,18 +21,31 @@ Item {
     signal clicked(int modifiers)
     signal selectionRequested(int modifiers)
 
-    readonly property int _baseRadius: MD.Token.shape.corner.extra_small
-    readonly property int _selectedRadius: MD.Token.shape.corner.large
-    readonly property int _radius: root.selected ? root._selectedRadius : root._baseRadius
-    readonly property real _selectedInset: root._selectedRadius / 2
+    // Content cards keep their own modest rounding; the window outline is
+    // handled by KWin/LightlyShaders and is intentionally unrelated.
+    readonly property int _radius: 12
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
-
-    Rectangle {
-        anchors.fill: parent
-        visible: root.selected
-        color: MD.Token.color.primary_container
-    }
+    readonly property bool gridMoving: GridView.view
+                                            ? (GridView.view.moving || GridView.view.flicking)
+                                            : false
+    // The shell shows a full-resolution snapshot while its width changes.
+    // Suspend animated thumbnail decoding underneath it; static previews and
+    // their source resolution are untouched.
+    readonly property bool sceneMoving: gridMoving || W.Global.sidebarAnimating
+    // Keep preloaded GIF delegates quiet.  `cacheBuffer` intentionally retains
+    // a little more than one row for smooth image hand-off, but those cards
+    // are not on screen and should not decode or upload animation frames.
+    // During motion the condition short-circuits before subscribing to
+    // contentY, so a flick does not add a per-frame binding cost per card.
+    readonly property bool animationEnabled: !sceneMoving && GridView.view
+                                            ? root.y + root.height
+                                                > GridView.view.contentY
+                                                  - Math.max(48, GridView.view.cellHeight * 0.35)
+                                              && root.y
+                                                 < GridView.view.contentY + GridView.view.height
+                                                   + Math.max(48, GridView.view.cellHeight * 0.35)
+                                            : false
 
     Item {
         id: m_card
@@ -43,7 +56,7 @@ Item {
         Item {
             id: m_cell
             anchors.fill: parent
-            anchors.margins: 6 + (root.selected ? root._selectedInset : 0)
+            anchors.margins: 6
 
             W.ThumbnailImage {
                 id: m_thumb
@@ -53,6 +66,25 @@ Item {
                 wpType  : root.wallpaper?.wpType ?? ""
                 fillMode: Image.PreserveAspectCrop
                 radius: root._radius
+                // Fixed rather than geometry-bound so sidebar transitions do
+                // not cause every visible image to be decoded again.  256 px
+                // remains comfortably above the normal 112–260 px card size.
+                maximumSourceSize: 256
+                motionActive: root.sceneMoving
+                animationEnabled: root.animationEnabled
+            }
+
+            // Selection never resizes the thumbnail or paints the whole grid
+            // cell.  A fine accent outline stays stable while users make a
+            // multi-selection across differently sized cells.
+            Rectangle {
+                anchors.fill: m_thumb
+                visible: root.selected
+                color: "transparent"
+                radius: root._radius
+                border.width: 2
+                border.color: W.Global.effectiveAccentColor
+                z: 2
             }
 
             // Scrim aligns to the image control's bounds; spans the
@@ -79,6 +111,12 @@ Item {
                 text: root.wallpaper?.name || qsTr("Untitled")
                 typescale: MD.Token.typescale.title_small
                 color: "white"
+                font.weight: Font.DemiBold
+                // The title remains regular vector text above the thumbnail;
+                // this outline improves contrast without ever reducing glyph
+                // resolution through the image cache.
+                style: Text.Outline
+                styleColor: Qt.rgba(0, 0, 0, 0.58)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
@@ -124,9 +162,9 @@ Item {
         height: 32
         radius: width / 2
         visible: root.selected
-        color: MD.Token.color.primary
-        border.color: MD.Token.color.primary_container
-        border.width: 3
+        color: W.Global.effectiveAccentColor
+        border.color: W.Global.cupertinoCard
+        border.width: 2
 
         MD.Icon {
             anchors.centerIn: parent

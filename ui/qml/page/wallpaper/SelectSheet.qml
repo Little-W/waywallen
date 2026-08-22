@@ -2,8 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Qcm.Material as MD
+import waywallen.ui as W
 
-MD.BottomSheet {
+W.CupertinoFrostedBottomSheet {
     id: control
 
     required property Item popupParent
@@ -17,9 +18,16 @@ MD.BottomSheet {
     dim: false
     dismissOnDragDown: false
     collapsedHeight: 48
+    mdState.backgroundColor: Qt.rgba(W.Global.cupertinoCard.r,
+                                     W.Global.cupertinoCard.g,
+                                     W.Global.cupertinoCard.b,
+                                     W.App.frostedGlassAvailable ? 0.94 : 1.0)
+    mdState.radius: 18
+    mdState.elevation: MD.Token.elevation.level1
 
     ColumnLayout {
         width: control.sheetWidth
+        y: 8
         spacing: 0
 
         MD.SheetActionBar {

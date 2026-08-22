@@ -4,6 +4,7 @@ import QtQml as Qml
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import Qcm.Material as MD
+import waywallen.ui as W
 
 // Search affordance shaped like an `MD.InputChip` (32px tall, 8px
 // radius, 1px outline) with a `TextInput` embedded inline. Plain
@@ -36,9 +37,9 @@ Item {
         id: m_bg
         anchors.fill: parent
         radius: 8
-        color: "transparent"
+        color: W.Global.cupertinoControlFill
         border.width: 1
-        border.color: MD.MProp.color.outline_variant
+        border.color: W.Global.cupertinoBorder
 
         // Ripple/state-layer parity with chip widgets — purely
         // hover-driven since the whole chip is a focus target via
@@ -50,12 +51,14 @@ Item {
             stateOpacity: m_mouse.containsMouse
                           ? MD.Token.state.hover.state_layer_opacity
                           : 0
-            color: MD.MProp.color.on_surface_variant
+            color: W.Global.effectiveAccentColor
         }
 
         MD.FocusIndicator {
             corners: MD.Util.corners(parent.radius)
             active: m_input.activeFocus
+            outerColor: W.Global.effectiveAccentColor
+            innerColor: W.Global.cupertinoCard
         }
 
         // Clicking anywhere on the chip focuses the input.
@@ -107,7 +110,7 @@ Item {
                     anchors.fill: parent
                     verticalAlignment: TextInput.AlignVCenter
                     color: MD.MProp.color.on_surface
-                    selectionColor: MD.MProp.color.primary
+                    selectionColor: W.Global.effectiveAccentColor
                     selectedTextColor: MD.MProp.color.on_primary
                     selectByMouse: true
                     clip: true
