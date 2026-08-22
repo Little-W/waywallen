@@ -1,0 +1,1 @@
+%systemd_user_postun waywallen.service

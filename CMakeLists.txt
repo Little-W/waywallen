@@ -68,6 +68,21 @@ if(WAYWALLEN_BUILD_DAEMON)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT Daemon
     )
+
+    # This is deliberately a user service: the daemon needs the Wayland and
+    # session D-Bus environment that only exists after graphical login.
+    # Use lib rather than CMAKE_INSTALL_LIBDIR so the RPM follows the standard
+    # /usr/lib/systemd/user location on lib64 systems as well.
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/systemd/user/waywallen.service"
+        DESTINATION "lib/systemd/user"
+        COMPONENT Daemon
+    )
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/systemd/user-preset/80-waywallen.preset"
+        DESTINATION "lib/systemd/user-preset"
+        COMPONENT Daemon
+    )
 endif()
 
 if(WAYWALLEN_BUILD_PLUGINS)

@@ -1,0 +1,16 @@
+[Unit]
+Description=Waywallen wallpaper backend
+Documentation=https://github.com/Little-W/waywallen
+Requires=dbus.socket
+After=dbus.socket graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/waywallen --no-ui
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=15s
+
+[Install]
+WantedBy=graphical-session.target

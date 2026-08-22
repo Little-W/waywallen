@@ -66,10 +66,22 @@ set(CPACK_RPM_PACKAGE_AUTOREQ             ON)
 # qt6-declarative-imports; the old Qt5Compat effects module is no longer used.
 set(CPACK_RPM_PACKAGE_REQUIRES            "qt6-declarative-imports")
 set(CPACK_RPM_FILE_NAME                   RPM-DEFAULT)
+# Keep the systemd user-unit lifecycle aligned with the distribution helpers:
+# a newly installed package follows the preset, while a user's later disable
+# choice is retained across upgrades.
+set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/rpm/waywallen.preinstall.sh")
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/rpm/waywallen.postinstall.sh")
+set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/rpm/waywallen.preuninstall.sh")
+set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/rpm/waywallen.postuninstall.sh")
 # Don't claim ownership of standard system dirs.
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
     "/usr/lib/systemd"
     "/usr/lib/systemd/user"
+    "/usr/lib/systemd/user-preset"
     "/usr/share/applications"
     "/usr/share/metainfo"
     "/usr/share/icons"

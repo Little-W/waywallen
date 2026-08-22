@@ -1,0 +1,2 @@
+# Start the wallpaper backend by default after a graphical user login.
+enable waywallen.service
