@@ -1169,6 +1169,25 @@ Related display: #%1</source>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
+    <message>
+        <source>Auto (recommended)</source>
+        <translation>自动（推荐）</translation>
+    </message>
+    <message>
+        <source>Scan GPUs</source>
+        <translation>扫描显卡</translation>
+    </message>
+    <message>
+        <source>No usable GPU found</source>
+        <translation>未发现可用显卡</translation>
+    </message>
+</context>
+<context>
+    <name>WallpaperDetailPanel</name>
+    <message>
+        <source>Display reconnected. Select it again before applying.</source>
+        <translation>显示器已重新连接，请重新选择后再应用。</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>
