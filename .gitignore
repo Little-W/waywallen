@@ -6,6 +6,8 @@ lito.lock
 /.env
 build
 /build*
+/_CPack_Packages/
+/waywallen-*.rpm
 .cache
 /bin
 /install/
