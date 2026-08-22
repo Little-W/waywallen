@@ -21,6 +21,10 @@ Item {
     readonly property var wp: (wallpaperGetQuery.wallpaper?.id_proto ?? "") !== "" ? wallpaperGetQuery.wallpaper : root.fallbackWallpaper
 
     property var applyTargetKeys: []
+    // A display reconnect invalidates its router-local id. Keep this state
+    // separate from an intentional "all displays" selection so pressing
+    // Apply cannot silently broaden a previously single-display request.
+    property bool applyTargetsStale: false
     property int rendererIndex: 0
     readonly property var kFillModeValues: [1, 2, 3, 7]
     readonly property var kFillModeLabels: [qsTr("Stretch"), qsTr("Fit"), qsTr("Crop"), qsTr("Center")]
@@ -47,12 +51,39 @@ Item {
     function selectedTargets() {
         const targets = [];
         for (const key of root.applyTargetKeys) {
-            if (key.indexOf("canvas:") === 0)
-                targets.push({ canvasId: key.slice(7) });
-            else if (key.indexOf("display:") === 0)
-                targets.push({ displayId: Number(key.slice(8)) });
+            if (key.indexOf("canvas:") === 0) {
+                const canvas = W.App.displayManager.getCanvas(key.slice(7));
+                if (canvas && canvas.hasLiveDisplays)
+                    targets.push({ canvasId: key.slice(7) });
+            } else if (key.indexOf("display:") === 0) {
+                // Router ids are regenerated after a display-plugin
+                // reconnect. Do not submit a remembered, now-stale id:
+                // an empty target list intentionally means every current
+                // selectable display.
+                const display = W.App.displayManager.get(Number(key.slice(8)));
+                if (display && display.selectableTarget)
+                    targets.push({ displayId: display.id });
+            }
         }
         return targets;
+    }
+    function pruneStaleApplyTargets() {
+        const next = [];
+        for (const key of root.applyTargetKeys) {
+            if (key.indexOf("canvas:") === 0) {
+                const canvas = W.App.displayManager.getCanvas(key.slice(7));
+                if (canvas && canvas.hasLiveDisplays)
+                    next.push(key);
+            } else if (key.indexOf("display:") === 0) {
+                const display = W.App.displayManager.get(Number(key.slice(8)));
+                if (display && display.selectableTarget)
+                    next.push(key);
+            }
+        }
+        if (next.length !== root.applyTargetKeys.length) {
+            root.applyTargetKeys = next;
+            root.applyTargetsStale = true;
+        }
     }
     function hasSelectableTarget() {
         const standalone = (W.App.displayManager.displays || []).some(display => display.selectableTarget);
@@ -92,6 +123,7 @@ Item {
         else
             next.push(key);
         root.applyTargetKeys = next;
+        root.applyTargetsStale = false;
     }
     function displayLabelForId(id) {
         const display = W.App.displayManager.get(id);
@@ -267,6 +299,16 @@ Item {
         }
     }
 
+    Connections {
+        target: W.App.displayManager
+        function onDisplaysChanged() {
+            root.pruneStaleApplyTargets();
+        }
+        function onCanvasesChanged() {
+            root.pruneStaleApplyTargets();
+        }
+    }
+
     W.UserPropertyListModel {
         id: propertyModel
         schemaJson: wallpaperGetQuery.wallpaper?.userPropertiesSchema ?? ""
@@ -339,6 +381,11 @@ Item {
                 return;
             if (!root.wp)
                 return;
+            if (root.applyTargetsStale) {
+                W.Action.toast(qsTr("Display reconnected. Select it again before applying."));
+                root.applyTargetsStale = false;
+                return;
+            }
             applyQuery.wallpaper = root.wp;
             applyQuery.targets = root.selectedTargets();
             if (root.rendererCandidates.length >= 2) {

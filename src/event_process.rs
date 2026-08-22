@@ -161,9 +161,33 @@ fn spawn_wallpaper_recall(state: Arc<DaemonContext>) {
                                     tasks::TaskKind::Apply,
                                     task_name,
                                     async move {
+                                        // A display client can reconnect while the settle
+                                        // window is open (notably when Plasma recreates a
+                                        // wallpaper item).  Router display ids are session
+                                        // local, so never hand a stale id to the apply path:
+                                        // the replacement registration will schedule its own
+                                        // recall shortly afterwards.
+                                        let live_ids = {
+                                            let live = state2
+                                                .router
+                                                .snapshot_displays()
+                                                .await
+                                                .into_iter()
+                                                .map(|display| display.id)
+                                                .collect::<HashSet<_>>();
+                                            ids.into_iter()
+                                                .filter(|display_id| live.contains(display_id))
+                                                .collect::<Vec<_>>()
+                                        };
+                                        if live_ids.is_empty() {
+                                            log::info!(
+                                                "wallpaper recall: all {wp_id} display targets reconnected before apply"
+                                            );
+                                            return Ok(());
+                                        }
                                         log::info!(
                                             "wallpaper recall: applying {wp_id} to {} display(s)",
-                                            ids.len()
+                                            live_ids.len()
                                         );
                                         let result = if let Some(canvas_id) = canvas_id {
                                             crate::application::restore_wallpaper_canvas(
@@ -176,7 +200,7 @@ fn spawn_wallpaper_recall(state: Arc<DaemonContext>) {
                                             crate::application::apply_wallpaper_to_displays_with_first_frame_timeout(
                                                 &state2,
                                                 &wp_id,
-                                                &ids,
+                                                &live_ids,
                                                 crate::application::APPLY_FIRST_FRAME_TIMEOUT,
                                                 crate::application::ApplySource::DisplayRecall,
                                             ).await

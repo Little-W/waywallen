@@ -1748,6 +1748,10 @@ impl Router {
         }
         self.reconcile_buffer_flags().await;
         self.sync_display(display_id).await;
+        // A static renderer can have published its only frame before this
+        // consumer reconnected.  Ask for its current frame after the Bind is
+        // queued so the newly registered display is guaranteed a replay.
+        self.resync_display_composition(display_id).await;
         self.reconcile_lifecycle().await;
         self.refresh_runtime_health().await;
         if let Some(snap) = self.snapshot_display(display_id).await {
@@ -2953,10 +2957,14 @@ impl Router {
                 .collect()
         };
         self.reconcile_buffer_flags().await;
-        for did in display_ids {
+        for &did in &display_ids {
             self.sync_display(did).await;
             self.reconcile_presentation_config(did).await;
         }
+        // BindBuffers can replace the producer pool while a static image is
+        // idle.  Re-emit the composition state, then request one frame only
+        // after every affected display has its new binding in its queue.
+        self.resync_display_compositions(display_ids).await;
         // BindBuffers is also when the renderer's actual texture dims
         // become known; push a fresh renderer snapshot for the UI.
         if let Some(snap) = self.snapshot_renderer(renderer_id).await {
