@@ -233,6 +233,13 @@
     </message>
 </context>
 <context>
+    <name>Display</name>
+    <message>
+        <source>Lock Screen</source>
+        <translation>锁屏</translation>
+    </message>
+</context>
+<context>
     <name>DisplayEditDialog</name>
     <message>
         <source>Edit display</source>
