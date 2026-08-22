@@ -1,14 +1,18 @@
 [Desktop Entry]
 Type=Application
 Name=Waywallen
+Name[zh_CN]=Waywallen
 GenericName=Wallpaper Manager for Linux
+GenericName[zh_CN]=Linux 动态壁纸管理器
 GenericName[ru]=Менеджер обоев для Linux
 Comment=@APP_SUMMARY@
+Comment[zh_CN]=管理并播放 Linux 桌面的动态壁纸
 Comment[ru]=Менеджер обоев для Linux
 Exec=waywallen
 Icon=@APP_ID@
 Terminal=false
 Categories=Graphics;Qt;
 Keywords=wallpaper;pipewire;vulkan;
+Keywords[zh_CN]=壁纸;动态壁纸;桌面;wallpaper;pipewire;vulkan;
 Keywords[ru]=обои;живые обои;рабочий стол;wallpaper;pipewire;vulkan;
 StartupNotify=true

@@ -2130,6 +2130,21 @@ Unsaved frame state may be lost.</source>
     </message>
 </context>
 <context>
+    <name>CupertinoSidebar</name>
+    <message>
+        <source>Plugins</source>
+        <translation>Плагины</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>О программе</translation>
+    </message>
+</context>
+<context>
     <name>WpTypeFilter</name>
     <message>
         <source>is</source>

@@ -2162,6 +2162,21 @@ Unsaved frame state may be lost.</source>
     </message>
 </context>
 <context>
+    <name>CupertinoSidebar</name>
+    <message>
+        <source>Plugins</source>
+        <translation>插件</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+</context>
+<context>
     <name>WpTypeFilter</name>
     <message>
         <source>is</source>

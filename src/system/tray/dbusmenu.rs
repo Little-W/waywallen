@@ -47,12 +47,12 @@ const ID_QUIT: i32 = 10;
 /// matching interval-in-seconds for `set_rotation_interval`.
 fn rotate_options() -> &'static [(i32, &'static str, u32)] {
     &[
-        (ID_ROT_OFF, "Off", 0),
-        (ID_ROT_30S, "30 seconds", 30),
-        (ID_ROT_1M, "1 minute", 60),
-        (ID_ROT_5M, "5 minutes", 300),
-        (ID_ROT_15M, "15 minutes", 900),
-        (ID_ROT_1H, "1 hour", 3600),
+        (ID_ROT_OFF, "关闭", 0),
+        (ID_ROT_30S, "30 秒", 30),
+        (ID_ROT_1M, "1 分钟", 60),
+        (ID_ROT_5M, "5 分钟", 300),
+        (ID_ROT_15M, "15 分钟", 900),
+        (ID_ROT_1H, "1 小时", 3600),
     ]
 }
 
@@ -334,12 +334,12 @@ pub async fn notify_menu_changed(app: &Arc<DaemonContext>) {
 
 fn build_root(menu: &MenuState) -> ItemStruct {
     let children: Vec<OwnedValue> = vec![
-        item_to_value(make_leaf(ID_OPEN_UI, "Open UI", None)),
-        item_to_value(make_leaf(ID_NEXT, "Next", None)),
-        item_to_value(make_leaf(ID_PREV, "Previous", None)),
+        item_to_value(make_leaf(ID_OPEN_UI, "打开界面", None)),
+        item_to_value(make_leaf(ID_NEXT, "下一张壁纸", None)),
+        item_to_value(make_leaf(ID_PREV, "上一张壁纸", None)),
         item_to_value(make_leaf(ID_SEP1, "", Some("separator"))),
-        item_to_value(make_checkmark(ID_SHUFFLE, "Shuffle", menu.is_shuffle)),
-        item_to_value(make_submenu_parent(ID_ROTATE, "Rotate")),
+        item_to_value(make_checkmark(ID_SHUFFLE, "随机播放", menu.is_shuffle)),
+        item_to_value(make_submenu_parent(ID_ROTATE, "自动切换")),
         item_to_value(make_leaf(ID_SEP_PL, "", Some("separator"))),
         item_to_value(make_leaf(
             ID_PAUSE,
@@ -352,9 +352,9 @@ fn build_root(menu: &MenuState) -> ItemStruct {
             None,
         )),
         item_to_value(make_leaf(ID_SEP2, "", Some("separator"))),
-        item_to_value(make_leaf(ID_RESCAN, "Rescan wallpapers", None)),
+        item_to_value(make_leaf(ID_RESCAN, "重新扫描壁纸", None)),
         item_to_value(make_leaf(ID_SEP3, "", Some("separator"))),
-        item_to_value(make_leaf(ID_QUIT, "Quit", None)),
+        item_to_value(make_leaf(ID_QUIT, "退出", None)),
     ];
     (ID_ROOT, root_props(), children)
 }
@@ -367,7 +367,7 @@ fn build_rotate_submenu(menu: &MenuState) -> ItemStruct {
     let mut props = HashMap::new();
     props.insert(
         "label".into(),
-        OwnedValue::try_from(Value::from("Rotate")).unwrap(),
+        OwnedValue::try_from(Value::from("自动切换")).unwrap(),
     );
     props.insert(
         "children-display".into(),
@@ -443,17 +443,17 @@ fn make_radio(id: i32, label: &str, on: bool) -> ItemStruct {
 
 fn pause_action_label(paused: bool) -> &'static str {
     if paused {
-        "Resume"
+        "继续播放"
     } else {
-        "Pause"
+        "暂停播放"
     }
 }
 
 fn mute_action_label(muted: bool) -> &'static str {
     if muted {
-        "Unmute"
+        "取消静音"
     } else {
-        "Mute"
+        "静音"
     }
 }
 
@@ -478,12 +478,12 @@ fn make_submenu_parent(id: i32, label: &str) -> ItemStruct {
 fn props_for(id: i32, menu: &MenuState) -> Option<HashMap<String, OwnedValue>> {
     match id {
         ID_ROOT => Some(root_props()),
-        ID_OPEN_UI => Some(make_leaf(id, "Open UI", None).1),
-        ID_NEXT => Some(make_leaf(id, "Next", None).1),
-        ID_PREV => Some(make_leaf(id, "Previous", None).1),
+        ID_OPEN_UI => Some(make_leaf(id, "打开界面", None).1),
+        ID_NEXT => Some(make_leaf(id, "下一张壁纸", None).1),
+        ID_PREV => Some(make_leaf(id, "上一张壁纸", None).1),
         ID_SEP1 | ID_SEP2 | ID_SEP3 | ID_SEP_PL => Some(make_leaf(id, "", Some("separator")).1),
-        ID_SHUFFLE => Some(make_checkmark(id, "Shuffle", menu.is_shuffle).1),
-        ID_ROTATE => Some(make_submenu_parent(id, "Rotate").1),
+        ID_SHUFFLE => Some(make_checkmark(id, "随机播放", menu.is_shuffle).1),
+        ID_ROTATE => Some(make_submenu_parent(id, "自动切换").1),
         ID_ROT_OFF | ID_ROT_30S | ID_ROT_1M | ID_ROT_5M | ID_ROT_15M | ID_ROT_1H => {
             let (_, label, secs) = rotate_options()
                 .iter()
@@ -493,8 +493,8 @@ fn props_for(id: i32, menu: &MenuState) -> Option<HashMap<String, OwnedValue>> {
         }
         ID_PAUSE => Some(make_leaf(id, pause_action_label(menu.manual_paused), None).1),
         ID_MUTE => Some(make_leaf(id, mute_action_label(menu.manual_muted), None).1),
-        ID_RESCAN => Some(make_leaf(id, "Rescan wallpapers", None).1),
-        ID_QUIT => Some(make_leaf(id, "Quit", None).1),
+        ID_RESCAN => Some(make_leaf(id, "重新扫描壁纸", None).1),
+        ID_QUIT => Some(make_leaf(id, "退出", None).1),
         _ => None,
     }
 }
