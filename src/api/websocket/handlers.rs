@@ -53,6 +53,9 @@ fn canvas_layout_from_pb(
             .rotation_set
             .then(|| rotation_from_pb(layout.rotation))
             .flatten(),
+        scale_percent: layout.scale_set.then(|| {
+            crate::wallframe::display::layout::normalize_scale_percent(layout.scale_percent)
+        }),
     }
 }
 
@@ -920,6 +923,13 @@ pub(super) async fn dispatch_inner(
                     .filter(|o| o.rotation_set)
                     .and_then(|o| rotation_from_pb(o.rotation))
             };
+            let new_scale_percent = if r.clear_scale {
+                None
+            } else {
+                r.r#override.as_ref().filter(|o| o.scale_set).map(|o| {
+                    crate::wallframe::display::layout::normalize_scale_percent(o.scale_percent)
+                })
+            };
             let target_id = state
                 .router
                 .set_display_layout(
@@ -929,9 +939,11 @@ pub(super) async fn dispatch_inner(
                     new_location,
                     new_align,
                     new_rotation,
+                    new_scale_percent,
                     r.clear_fillmode,
                     r.clear_align || r.clear_location,
                     r.clear_rotation,
+                    r.clear_scale,
                 )
                 .await;
             let display = match target_id {
@@ -1072,6 +1084,18 @@ pub(super) async fn dispatch_inner(
                     .filter(|layout| layout.rotation_set)
                     .and_then(|layout| rotation_from_pb(layout.rotation))
             };
+            let new_scale_percent = if r.clear_scale {
+                None
+            } else {
+                r.r#override
+                    .as_ref()
+                    .filter(|layout| layout.scale_set)
+                    .map(|layout| {
+                        crate::wallframe::display::layout::normalize_scale_percent(
+                            layout.scale_percent,
+                        )
+                    })
+            };
             state
                 .router
                 .set_canvas_layout(
@@ -1079,9 +1103,11 @@ pub(super) async fn dispatch_inner(
                     new_fillmode,
                     new_location,
                     new_rotation,
+                    new_scale_percent,
                     r.clear_fillmode,
                     r.clear_location,
                     r.clear_rotation,
+                    r.clear_scale,
                 )
                 .await?;
             let canvas = state
@@ -1775,6 +1801,12 @@ pub(super) async fn dispatch_inner(
                         }
                         if let Some(rt) = rotation_from_pb(ld.rotation) {
                             s.global.layout.rotation = rt;
+                        }
+                        if ld.scale_percent != 0 {
+                            s.global.layout.scale_percent =
+                                crate::wallframe::display::layout::normalize_scale_percent(
+                                    ld.scale_percent,
+                                );
                         }
                     }
                     if let Some(policy) = g.auto_replay.as_ref() {

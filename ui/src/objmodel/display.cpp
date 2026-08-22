@@ -35,24 +35,26 @@ auto Display::linksFromPb(const proto::DisplayInfo& info) -> QVariantList {
 auto Display::effectiveLayoutFromPb(const proto::DisplayInfo& info) -> QVariantMap {
     QVariantMap m;
     if (! info.hasEffectiveLayout()) return m;
-    const auto& l     = info.effectiveLayout();
-    m[u"fillmode"_s]  = static_cast<int>(l.fillmode());
-    m[u"align"_s]     = static_cast<int>(l.align());
-    m[u"locationX"_s] = l.locationX();
-    m[u"locationY"_s] = l.locationY();
-    m[u"rotation"_s]  = static_cast<int>(l.rotation());
+    const auto& l        = info.effectiveLayout();
+    m[u"fillmode"_s]     = static_cast<int>(l.fillmode());
+    m[u"align"_s]        = static_cast<int>(l.align());
+    m[u"locationX"_s]    = l.locationX();
+    m[u"locationY"_s]    = l.locationY();
+    m[u"rotation"_s]     = static_cast<int>(l.rotation());
+    m[u"scalePercent"_s] = l.scalePercent();
     return m;
 }
 
 auto Display::displayLayoutFromPb(const proto::DisplayInfo& info) -> QVariantMap {
     QVariantMap m;
     if (! info.hasDisplayLayout()) return m;
-    const auto& l     = info.displayLayout();
-    m[u"fillmode"_s]  = static_cast<int>(l.fillmode());
-    m[u"align"_s]     = static_cast<int>(l.align());
-    m[u"locationX"_s] = l.locationX();
-    m[u"locationY"_s] = l.locationY();
-    m[u"rotation"_s]  = static_cast<int>(l.rotation());
+    const auto& l        = info.displayLayout();
+    m[u"fillmode"_s]     = static_cast<int>(l.fillmode());
+    m[u"align"_s]        = static_cast<int>(l.align());
+    m[u"locationX"_s]    = l.locationX();
+    m[u"locationY"_s]    = l.locationY();
+    m[u"rotation"_s]     = static_cast<int>(l.rotation());
+    m[u"scalePercent"_s] = l.scalePercent();
     return m;
 }
 
@@ -63,16 +65,18 @@ auto Display::layoutOverriddenByWallpaperFromPb(const proto::DisplayInfo& info) 
 auto Display::layoutOverrideFromPb(const proto::DisplayInfo& info) -> QVariantMap {
     QVariantMap m;
     if (! info.hasLayoutOverride()) return m;
-    const auto& o       = info.layoutOverride();
-    m[u"fillmodeSet"_s] = o.fillmodeSet();
-    m[u"fillmode"_s]    = static_cast<int>(o.fillmode());
-    m[u"alignSet"_s]    = o.alignSet();
-    m[u"align"_s]       = static_cast<int>(o.align());
-    m[u"locationSet"_s] = o.locationSet();
-    m[u"locationX"_s]   = o.locationX();
-    m[u"locationY"_s]   = o.locationY();
-    m[u"rotationSet"_s] = o.rotationSet();
-    m[u"rotation"_s]    = static_cast<int>(o.rotation());
+    const auto& o        = info.layoutOverride();
+    m[u"fillmodeSet"_s]  = o.fillmodeSet();
+    m[u"fillmode"_s]     = static_cast<int>(o.fillmode());
+    m[u"alignSet"_s]     = o.alignSet();
+    m[u"align"_s]        = static_cast<int>(o.align());
+    m[u"locationSet"_s]  = o.locationSet();
+    m[u"locationX"_s]    = o.locationX();
+    m[u"locationY"_s]    = o.locationY();
+    m[u"rotationSet"_s]  = o.rotationSet();
+    m[u"rotation"_s]     = static_cast<int>(o.rotation());
+    m[u"scaleSet"_s]     = o.scaleSet();
+    m[u"scalePercent"_s] = o.scalePercent();
     return m;
 }
 
@@ -234,25 +238,28 @@ auto Canvas::membersFromPb(const proto::CanvasInfo& info) -> QVariantList {
 auto Canvas::layoutOverrideFromPb(const proto::CanvasInfo& info) -> QVariantMap {
     QVariantMap out;
     if (! info.hasLayoutOverride()) return out;
-    const auto& layout    = info.layoutOverride();
-    out[u"fillmodeSet"_s] = layout.fillmodeSet();
-    out[u"fillmode"_s]    = static_cast<int>(layout.fillmode());
-    out[u"locationSet"_s] = layout.locationSet();
-    out[u"locationX"_s]   = layout.locationX();
-    out[u"locationY"_s]   = layout.locationY();
-    out[u"rotationSet"_s] = layout.rotationSet();
-    out[u"rotation"_s]    = static_cast<int>(layout.rotation());
+    const auto& layout     = info.layoutOverride();
+    out[u"fillmodeSet"_s]  = layout.fillmodeSet();
+    out[u"fillmode"_s]     = static_cast<int>(layout.fillmode());
+    out[u"locationSet"_s]  = layout.locationSet();
+    out[u"locationX"_s]    = layout.locationX();
+    out[u"locationY"_s]    = layout.locationY();
+    out[u"rotationSet"_s]  = layout.rotationSet();
+    out[u"rotation"_s]     = static_cast<int>(layout.rotation());
+    out[u"scaleSet"_s]     = layout.scaleSet();
+    out[u"scalePercent"_s] = layout.scalePercent();
     return out;
 }
 
 auto Canvas::effectiveLayoutFromPb(const proto::CanvasInfo& info) -> QVariantMap {
     QVariantMap out;
     if (! info.hasEffectiveLayout()) return out;
-    const auto& layout  = info.effectiveLayout();
-    out[u"fillmode"_s]  = static_cast<int>(layout.fillmode());
-    out[u"locationX"_s] = layout.locationX();
-    out[u"locationY"_s] = layout.locationY();
-    out[u"rotation"_s]  = static_cast<int>(layout.rotation());
+    const auto& layout     = info.effectiveLayout();
+    out[u"fillmode"_s]     = static_cast<int>(layout.fillmode());
+    out[u"locationX"_s]    = layout.locationX();
+    out[u"locationY"_s]    = layout.locationY();
+    out[u"rotation"_s]     = static_cast<int>(layout.rotation());
+    out[u"scalePercent"_s] = layout.scalePercent();
     return out;
 }
 

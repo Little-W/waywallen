@@ -420,6 +420,10 @@
         <translation>Режим заполнения</translation>
     </message>
     <message>
+        <source>Scale</source>
+        <translation>Масштаб</translation>
+    </message>
+    <message>
         <source>Horizontal</source>
         <translation>По горизонтали</translation>
     </message>
@@ -1713,6 +1717,10 @@ Unsaved frame state may be lost.</source>
     <message>
         <source>Fill mode</source>
         <translation>Режим заполнения</translation>
+    </message>
+    <message>
+        <source>Scale</source>
+        <translation>Масштаб</translation>
     </message>
     <message>
         <source>Horizontal</source>

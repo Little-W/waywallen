@@ -166,6 +166,7 @@ pub fn project_canvas(
         disp_h: layout_height as f32,
         fillmode: layout.fillmode,
         location: layout.location,
+        scale_percent: layout.scale_percent,
         clear_rgba,
     });
 
@@ -243,6 +244,7 @@ mod tests {
             fillmode,
             location: Location::default(),
             rotation: Rotation::Normal,
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
         }
     }
 

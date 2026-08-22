@@ -372,6 +372,8 @@ fn canvas_layout_override_to_pb(layout: crate::settings::CanvasLayoutPrefs) -> p
         location_set: layout.location.is_some(),
         location_x: layout.location.map_or(50, |location| u32::from(location.x)),
         location_y: layout.location.map_or(50, |location| u32::from(location.y)),
+        scale_set: layout.scale_percent.is_some(),
+        scale_percent: layout.scale_percent.map(u32::from).unwrap_or(0),
     }
 }
 
@@ -450,6 +452,7 @@ pub(super) fn layout_prefs_to_pb_resolved(r: &crate::settings::ResolvedLayout) -
         location_x: u32::from(r.location.x.min(100)),
         location_y: u32::from(r.location.y.min(100)),
         location_set: true,
+        scale_percent: u32::from(r.scale_percent),
     }
 }
 
@@ -474,6 +477,8 @@ pub(super) fn layout_override_to_pb(p: &crate::settings::DisplayPrefs) -> pb::La
         location_set: location.is_some(),
         location_x: location.map(|v| u32::from(v.x.min(100))).unwrap_or(0),
         location_y: location.map(|v| u32::from(v.y.min(100))).unwrap_or(0),
+        scale_set: p.scale_percent.is_some(),
+        scale_percent: p.scale_percent.map(u32::from).unwrap_or(0),
     }
 }
 
@@ -565,6 +570,11 @@ pub(super) fn resolved_layout_from_pb(p: &pb::LayoutPrefs) -> crate::settings::R
                 .unwrap_or_default()
         },
         rotation: rotation_from_pb(p.rotation).unwrap_or_default(),
+        scale_percent: if p.scale_percent == 0 {
+            crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT
+        } else {
+            crate::wallframe::display::layout::normalize_scale_percent(p.scale_percent)
+        },
     }
 }
 
@@ -702,6 +712,7 @@ pub(super) fn global_to_pb(g: &crate::settings::GlobalSettings) -> pb::GlobalSet
                     .min(100),
             ),
             location_set: true,
+            scale_percent: u32::from(g.layout.scale_percent),
         }),
         auto_replay: Some(auto_replay_to_pb(&g.effective_auto_replay())),
         pause_effect: Some(pause_effect_to_pb(g.pause_effect)),

@@ -491,6 +491,7 @@ void WallpaperLayoutSetQuery::setFillmode(int v) { WW_SET(m_fillmode, v); }
 void WallpaperLayoutSetQuery::setLocationX(int v) { WW_SET(m_location_x, v); }
 void WallpaperLayoutSetQuery::setLocationY(int v) { WW_SET(m_location_y, v); }
 void WallpaperLayoutSetQuery::setRotation(int v) { WW_SET(m_rotation, v); }
+void WallpaperLayoutSetQuery::setScalePercent(int v) { WW_SET(m_scale_percent, v); }
 #undef WW_SET
 
 void WallpaperLayoutSetQuery::reload() {
@@ -508,6 +509,7 @@ void WallpaperLayoutSetQuery::reload() {
         layout.setLocationY(static_cast<quint32>(std::clamp(m_location_y, 0, 100)));
         layout.setLocationSet(true);
         layout.setRotation(static_cast<proto::Rotation>(m_rotation));
+        layout.setScalePercent(static_cast<quint32>(std::clamp(m_scale_percent, 10, 400)));
         inner.setLayout(std::move(layout));
     }
 

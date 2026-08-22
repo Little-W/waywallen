@@ -11,11 +11,17 @@ const FILL_MODE_KEY: &str = "waywallen.fill_mode";
 const ROTATION_KEY: &str = "waywallen.rotation";
 const LOCATION_X_KEY: &str = "waywallen.location_x";
 const LOCATION_Y_KEY: &str = "waywallen.location_y";
+const SCALE_PERCENT_KEY: &str = "waywallen.scale_percent";
 
 const LEGACY_SCHEME_COLOR_KEY: &str = "schemecolor";
 
-const DAEMON_LAYOUT_SCHEMA_KEYS: &[&str] =
-    &[FILL_MODE_KEY, ROTATION_KEY, LOCATION_X_KEY, LOCATION_Y_KEY];
+const DAEMON_LAYOUT_SCHEMA_KEYS: &[&str] = &[
+    FILL_MODE_KEY,
+    ROTATION_KEY,
+    LOCATION_X_KEY,
+    LOCATION_Y_KEY,
+    SCALE_PERCENT_KEY,
+];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -23,6 +29,7 @@ pub struct WallpaperLayoutOverride {
     pub fillmode: Option<FillMode>,
     pub location: Option<Location>,
     pub rotation: Option<Rotation>,
+    pub scale_percent: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +37,7 @@ struct PersistedWallpaperLayoutOverride {
     fillmode: FillMode,
     location: Location,
     rotation: Rotation,
+    scale_percent: u16,
 }
 
 impl WallpaperLayoutOverride {
@@ -38,6 +46,7 @@ impl WallpaperLayoutOverride {
             fillmode: Some(layout.fillmode),
             location: Some(layout.location),
             rotation: Some(layout.rotation),
+            scale_percent: Some(layout.scale_percent),
         }
     }
 
@@ -46,6 +55,7 @@ impl WallpaperLayoutOverride {
             fillmode: FillMode::default(),
             location: Location::default(),
             rotation: Rotation::default(),
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
         })
     }
 
@@ -54,11 +64,15 @@ impl WallpaperLayoutOverride {
             fillmode: self.fillmode.unwrap_or(base.fillmode),
             location: self.location.unwrap_or(base.location),
             rotation: self.rotation.unwrap_or(base.rotation),
+            scale_percent: self.scale_percent.unwrap_or(base.scale_percent),
         }
     }
 
     pub fn is_empty(self) -> bool {
-        self.fillmode.is_none() && self.location.is_none() && self.rotation.is_none()
+        self.fillmode.is_none()
+            && self.location.is_none()
+            && self.rotation.is_none()
+            && self.scale_percent.is_none()
     }
 }
 
@@ -72,6 +86,7 @@ pub fn wallpaper_layout_override_from_json(raw: &str) -> Option<WallpaperLayoutO
             fillmode: persisted.fillmode,
             location: persisted.location,
             rotation: persisted.rotation,
+            scale_percent: persisted.scale_percent,
         }));
     }
     let parsed = serde_json::from_str::<WallpaperLayoutOverride>(raw).ok()?;
@@ -85,13 +100,14 @@ pub fn wallpaper_layout_override_to_json(
         fillmode: layout.fillmode,
         location: layout.location,
         rotation: layout.rotation,
+        scale_percent: layout.scale_percent,
     })
 }
 
 pub fn is_daemon_display_property_key(key: &str) -> bool {
     matches!(
         key,
-        FILL_MODE_KEY | ROTATION_KEY | LOCATION_X_KEY | LOCATION_Y_KEY
+        FILL_MODE_KEY | ROTATION_KEY | LOCATION_X_KEY | LOCATION_Y_KEY | SCALE_PERCENT_KEY
     )
 }
 
@@ -259,6 +275,7 @@ pub fn split_renderer_properties(
     let mut rotation = None;
     let mut location_x = None;
     let mut location_y = None;
+    let mut scale_percent = None;
 
     for (key, value) in map {
         match key.as_str() {
@@ -266,6 +283,7 @@ pub fn split_renderer_properties(
             ROTATION_KEY => rotation = parse_rotation(&value),
             LOCATION_X_KEY => location_x = parse_percent(&value),
             LOCATION_Y_KEY => location_y = parse_percent(&value),
+            SCALE_PERCENT_KEY => scale_percent = parse_scale_percent(&value),
             _ => {
                 renderer.insert(key, value);
             }
@@ -284,6 +302,7 @@ pub fn split_renderer_properties(
         fillmode,
         location,
         rotation,
+        scale_percent,
     };
     (renderer, layout)
 }
@@ -320,6 +339,20 @@ fn parse_percent(value: &str) -> Option<u8> {
     Some(parsed.round().clamp(0.0, 100.0) as u8)
 }
 
+fn parse_scale_percent(value: &str) -> Option<u16> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let parsed = value.parse::<f32>().ok()?;
+    if !parsed.is_finite() {
+        return None;
+    }
+    Some(crate::wallframe::display::layout::normalize_scale_percent(
+        parsed.round().max(0.0) as u32,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,13 +363,16 @@ mod tests {
             "waywallen.fill_mode": "centered",
             "waywallen.location_x": "25",
             "waywallen.location_y": "75",
+            "waywallen.scale_percent": "500",
             "speed": "2"
         }"#;
         let properties = serde_json::from_str(raw).unwrap();
         let (renderer, layout) = split_renderer_properties(properties);
         assert_eq!(layout.fillmode, Some(FillMode::Centered));
         assert_eq!(layout.location, Some(Location::new(25, 75)));
+        assert_eq!(layout.scale_percent, Some(400));
         assert_eq!(renderer.get("speed").map(String::as_str), Some("2"));
+        assert!(!renderer.contains_key("waywallen.scale_percent"));
     }
 
     #[test]

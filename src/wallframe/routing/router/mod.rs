@@ -729,6 +729,7 @@ impl Router {
                 fillmode: FillMode::default(),
                 location: Default::default(),
                 rotation: Default::default(),
+                scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
             };
         };
         if let Some(iid) = info.instance_id.as_deref() {
@@ -746,6 +747,7 @@ impl Router {
             fillmode: FillMode::default(),
             location: Default::default(),
             rotation: Default::default(),
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
         }
     }
 
@@ -777,6 +779,7 @@ impl Router {
                 || p.location.is_some()
                 || p.align.is_some()
                 || p.rotation.is_some()
+                || p.scale_percent.is_some()
         }) {
             LayoutSource::Display
         } else {
@@ -954,9 +957,11 @@ impl Router {
         new_location: Option<crate::wallframe::display::layout::Location>,
         new_align: Option<crate::wallframe::display::layout::Align>,
         new_rotation: Option<crate::wallframe::display::layout::Rotation>,
+        new_scale_percent: Option<u16>,
         clear_fillmode: bool,
         clear_align: bool,
         clear_rotation: bool,
+        clear_scale: bool,
     ) -> Option<DisplayId> {
         let Some(settings) = self.settings.get().cloned() else {
             log::warn!(
@@ -998,6 +1003,12 @@ impl Router {
             if let Some(v) = new_rotation {
                 entry.rotation = Some(v);
             }
+            if clear_scale {
+                entry.scale_percent = None;
+            }
+            if let Some(v) = new_scale_percent {
+                entry.scale_percent = Some(v);
+            }
             // Prune empty entry to keep the on-disk file tidy.
             if entry.is_empty() {
                 s.displays.remove(&key);
@@ -1016,9 +1027,11 @@ impl Router {
         new_fillmode: Option<crate::wallframe::display::layout::FillMode>,
         new_location: Option<crate::wallframe::display::layout::Location>,
         new_rotation: Option<crate::wallframe::display::layout::Rotation>,
+        new_scale_percent: Option<u16>,
         clear_fillmode: bool,
         clear_location: bool,
         clear_rotation: bool,
+        clear_scale: bool,
     ) -> crate::error::Result<()> {
         let settings = self.settings.get().ok_or_else(|| {
             crate::error::Error::FailedPrecondition("settings are not attached".to_string())
@@ -1045,6 +1058,12 @@ impl Router {
         }
         if let Some(rotation) = new_rotation {
             layout.rotation = Some(rotation);
+        }
+        if clear_scale {
+            layout.scale_percent = None;
+        }
+        if let Some(scale_percent) = new_scale_percent {
+            layout.scale_percent = Some(scale_percent);
         }
         let layout = (!layout.is_empty()).then_some(layout);
         if settings.set_canvas_layout(canvas_id, layout)? {
@@ -4531,6 +4550,8 @@ mod tests {
                 Some(FillMode::PreserveAspectFit),
                 Some(crate::wallframe::display::layout::Location::new(25, 75)),
                 Some(crate::wallframe::display::layout::Rotation::Cw90),
+                Some(150),
+                false,
                 false,
                 false,
                 false,
@@ -4547,6 +4568,7 @@ mod tests {
                 fillmode: Some(FillMode::PreserveAspectFit),
                 location: Some(crate::wallframe::display::layout::Location::new(25, 75)),
                 rotation: Some(crate::wallframe::display::layout::Rotation::Cw90),
+                scale_percent: Some(150),
             })
         );
         assert_eq!(settings.canvas_revision(), receipt.revision);
@@ -4735,6 +4757,8 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                false,
                 false,
                 false,
                 false,
@@ -5462,6 +5486,7 @@ mod tests {
             fillmode: FillMode::PreserveAspectFit,
             location: Default::default(),
             rotation: Default::default(),
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
         };
         let cfg = project_link(&link, &pool, &info, 1, 7, &layout);
         assert_eq!((cfg.display_w, cfg.display_h), (1280.0, 720.0));
@@ -5486,6 +5511,7 @@ mod tests {
             fillmode: FillMode::PreserveAspectFit,
             location: Default::default(),
             rotation: Default::default(),
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
         };
         link.projection = LinkProjection::Canvas {
             canvas_id: "canvas".into(),

@@ -56,14 +56,20 @@ MD.Page {
         return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
     }
 
+    function clampScalePercent(value) {
+        return Math.max(25, Math.min(400, Math.round(Number(value) || 100)));
+    }
+
     function prepareCanvasLayoutUpdate() {
         canvasLayoutSetQuery.canvasId = root.selectedCanvasObject.id;
         canvasLayoutSetQuery.fillmodeSet = false;
         canvasLayoutSetQuery.locationSet = false;
         canvasLayoutSetQuery.rotationSet = false;
+        canvasLayoutSetQuery.scaleSet = false;
         canvasLayoutSetQuery.clearFillmode = false;
         canvasLayoutSetQuery.clearLocation = false;
         canvasLayoutSetQuery.clearRotation = false;
+        canvasLayoutSetQuery.clearScale = false;
     }
 
     function applyLocation(x, y) {
@@ -85,10 +91,12 @@ MD.Page {
         layoutSetQuery.locationY = root.clampPercent(y);
         layoutSetQuery.alignSet = false;
         layoutSetQuery.rotationSet = false;
+        layoutSetQuery.scaleSet = false;
         layoutSetQuery.clearFillmode = false;
         layoutSetQuery.clearLocation = false;
         layoutSetQuery.clearAlign = false;
         layoutSetQuery.clearRotation = false;
+        layoutSetQuery.clearScale = false;
         layoutSetQuery.reload();
     }
 
@@ -109,10 +117,12 @@ MD.Page {
         layoutSetQuery.locationSet = false;
         layoutSetQuery.alignSet = false;
         layoutSetQuery.rotationSet = false;
+        layoutSetQuery.scaleSet = false;
         layoutSetQuery.clearFillmode = false;
         layoutSetQuery.clearLocation = false;
         layoutSetQuery.clearAlign = false;
         layoutSetQuery.clearRotation = false;
+        layoutSetQuery.clearScale = false;
         layoutSetQuery.reload();
     }
 
@@ -133,10 +143,38 @@ MD.Page {
         layoutSetQuery.alignSet = false;
         layoutSetQuery.rotationSet = true;
         layoutSetQuery.rotation = value;
+        layoutSetQuery.scaleSet = false;
         layoutSetQuery.clearFillmode = false;
         layoutSetQuery.clearLocation = false;
         layoutSetQuery.clearAlign = false;
         layoutSetQuery.clearRotation = false;
+        layoutSetQuery.clearScale = false;
+        layoutSetQuery.reload();
+    }
+
+    function applyScale(value) {
+        if (!root.selected)
+            return;
+        if (root.selectedKind === "canvas") {
+            root.prepareCanvasLayoutUpdate();
+            canvasLayoutSetQuery.scaleSet = true;
+            canvasLayoutSetQuery.scalePercent = root.clampScalePercent(value);
+            canvasLayoutSetQuery.reload();
+            return;
+        }
+        layoutSetQuery.name = root.selected.name;
+        layoutSetQuery.displayId = root.selected.id;
+        layoutSetQuery.fillmodeSet = false;
+        layoutSetQuery.locationSet = false;
+        layoutSetQuery.alignSet = false;
+        layoutSetQuery.rotationSet = false;
+        layoutSetQuery.scaleSet = true;
+        layoutSetQuery.scalePercent = root.clampScalePercent(value);
+        layoutSetQuery.clearFillmode = false;
+        layoutSetQuery.clearLocation = false;
+        layoutSetQuery.clearAlign = false;
+        layoutSetQuery.clearRotation = false;
+        layoutSetQuery.clearScale = false;
         layoutSetQuery.reload();
     }
 
@@ -148,6 +186,7 @@ MD.Page {
             canvasLayoutSetQuery.clearFillmode = true;
             canvasLayoutSetQuery.clearLocation = true;
             canvasLayoutSetQuery.clearRotation = true;
+            canvasLayoutSetQuery.clearScale = true;
             canvasLayoutSetQuery.reload();
             return;
         }
@@ -156,10 +195,13 @@ MD.Page {
         layoutSetQuery.fillmodeSet = false;
         layoutSetQuery.locationSet = false;
         layoutSetQuery.alignSet = false;
+        layoutSetQuery.rotationSet = false;
+        layoutSetQuery.scaleSet = false;
         layoutSetQuery.clearFillmode = true;
         layoutSetQuery.clearLocation = true;
         layoutSetQuery.clearAlign = true;
         layoutSetQuery.clearRotation = true;
+        layoutSetQuery.clearScale = true;
         layoutSetQuery.reload();
     }
 
@@ -1386,10 +1428,10 @@ MD.Page {
                                             return false;
                                         if (root.selectedKind === "canvas") {
                                             const ovr = root.selectedCanvasObject?.layoutOverride || ({});
-                                            return !canvasLayoutSetQuery.querying && (ovr.fillmodeSet === true || ovr.locationSet === true || ovr.rotationSet === true);
+                                            return !canvasLayoutSetQuery.querying && (ovr.fillmodeSet === true || ovr.locationSet === true || ovr.rotationSet === true || ovr.scaleSet === true);
                                         }
                                         const ovr = root.selected.layoutOverride || ({});
-                                        return ovr.fillmodeSet === true || ovr.locationSet === true || ovr.alignSet === true || ovr.rotationSet === true;
+                                        return ovr.fillmodeSet === true || ovr.locationSet === true || ovr.alignSet === true || ovr.rotationSet === true || ovr.scaleSet === true;
                                     }
                                     icon.name: MD.Token.icon.settings_backup_restore
                                     MD.ToolTip.visible: hovered
@@ -1410,6 +1452,7 @@ MD.Page {
                             }
                             readonly property int currentX: root.clampPercent(displayLayout.locationX ?? 50)
                             readonly property int currentY: root.clampPercent(displayLayout.locationY ?? 50)
+                            readonly property int currentScalePercent: root.clampScalePercent(displayLayout.scalePercent ?? 100)
                             readonly property bool locationEnabled: !!root.selected && (displayLayout.fillmode || 0) !== 1
                             Layout.fillWidth: true
                             visible: !!root.selected && (root.selectedKind === "canvas" || !(root.selected.canvasId || "").length)
@@ -1436,6 +1479,30 @@ MD.Page {
                                         return root.fillmodeIndex(layoutFlow.displayLayout.fillmode || 0);
                                     }
                                     onActivated: idx => root.applyFillmode(root.kFillModeValues[idx])
+                                }
+                            }
+
+                            ColumnLayout {
+                                width: Math.min(layoutFlow.width, 260)
+                                spacing: 4
+
+                                MD.Text {
+                                    text: qsTr("Scale")
+                                    typescale: MD.Token.typescale.label_medium
+                                    color: MD.Token.color.on_surface_variant
+                                }
+
+                                W.ValueSlider {
+                                    id: scalePercent
+                                    Layout.fillWidth: true
+                                    from: 25
+                                    to: 400
+                                    stepSize: 1
+                                    value: layoutFlow.currentScalePercent
+                                    valueText: root.clampScalePercent(value) + "%"
+                                    valueMaxText: root.clampScalePercent(to) + "%"
+                                    valueHorizontalAlignment: Text.AlignLeft
+                                    onMoved: root.applyScale(value)
                                 }
                             }
 

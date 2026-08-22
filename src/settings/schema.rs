@@ -4,15 +4,33 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
+fn default_scale_percent() -> u16 {
+    crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT
+}
+
 /// Daemon-wide layout defaults applied to displays that have no
 /// `[displays.<name>]` override.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LayoutDefaults {
     pub fillmode: FillMode,
     pub location: Option<Location>,
     pub align: Align,
     pub rotation: Rotation,
+    #[serde(default = "default_scale_percent")]
+    pub scale_percent: u16,
+}
+
+impl Default for LayoutDefaults {
+    fn default() -> Self {
+        Self {
+            fillmode: FillMode::default(),
+            location: None,
+            align: Align::default(),
+            rotation: Rotation::default(),
+            scale_percent: crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT,
+        }
+    }
 }
 
 /// Per-display overrides keyed by display name.
@@ -24,6 +42,7 @@ pub struct DisplayPrefs {
     pub location: Option<Location>,
     pub align: Option<Align>,
     pub rotation: Option<Rotation>,
+    pub scale_percent: Option<u16>,
     pub auto_replay: Option<AutoReplayPolicy>,
     /// Last wallpaper id applied to this display.
     /// Used to restore per-display assignment on restart.
@@ -41,6 +60,7 @@ impl DisplayPrefs {
             && self.location.is_none()
             && self.align.is_none()
             && self.rotation.is_none()
+            && self.scale_percent.is_none()
             && self.auto_replay.is_none()
             && self.last_wallpaper.is_none()
             && self.alias.is_none()
@@ -69,11 +89,15 @@ pub struct CanvasLayoutPrefs {
     pub fillmode: Option<FillMode>,
     pub location: Option<Location>,
     pub rotation: Option<Rotation>,
+    pub scale_percent: Option<u16>,
 }
 
 impl CanvasLayoutPrefs {
     pub fn is_empty(self) -> bool {
-        self.fillmode.is_none() && self.location.is_none() && self.rotation.is_none()
+        self.fillmode.is_none()
+            && self.location.is_none()
+            && self.rotation.is_none()
+            && self.scale_percent.is_none()
     }
 }
 
@@ -83,6 +107,7 @@ pub struct ResolvedLayout {
     pub fillmode: FillMode,
     pub location: Location,
     pub rotation: Rotation,
+    pub scale_percent: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

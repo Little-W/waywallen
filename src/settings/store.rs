@@ -235,6 +235,11 @@ impl SettingsStore {
                 .or_else(|| prefs.and_then(|p| p.align.map(Location::from_align)))
                 .unwrap_or(default_location),
             rotation: prefs.and_then(|p| p.rotation).unwrap_or(defaults.rotation),
+            scale_percent: crate::wallframe::display::layout::normalize_scale_percent(u32::from(
+                prefs
+                    .and_then(|p| p.scale_percent)
+                    .unwrap_or(defaults.scale_percent),
+            )),
         }
     }
 
@@ -247,6 +252,9 @@ impl SettingsStore {
                 .location
                 .unwrap_or_else(|| Location::from_align(defaults.align)),
             rotation: defaults.rotation,
+            scale_percent: crate::wallframe::display::layout::normalize_scale_percent(u32::from(
+                defaults.scale_percent,
+            )),
         }
     }
 
@@ -275,6 +283,11 @@ impl SettingsStore {
             rotation: canvas
                 .and_then(|layout| layout.rotation)
                 .unwrap_or(inherited.rotation),
+            scale_percent: crate::wallframe::display::layout::normalize_scale_percent(u32::from(
+                canvas
+                    .and_then(|layout| layout.scale_percent)
+                    .unwrap_or(inherited.scale_percent),
+            )),
         }
     }
 

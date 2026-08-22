@@ -738,6 +738,7 @@ message LayoutPrefs {
   uint32   location_x = 5; // 0..100, 50 = center
   uint32   location_y = 6; // 0..100, 50 = center
   bool     location_set = 7;
+  uint32   scale_percent = 8; // 10..400, 100 = original size
   reserved 3;
   reserved "clear_rgba";
 }
@@ -757,6 +758,8 @@ message LayoutOverride {
   bool   location_set = 9;
   uint32 location_x = 10; // 0..100, 50 = center
   uint32 location_y = 11; // 0..100, 50 = center
+  bool   scale_set = 12;
+  uint32 scale_percent = 13; // 10..400, 100 = original size
   reserved 5, 6;
   reserved "clear_rgba_set", "clear_rgba";
 }
@@ -873,6 +876,7 @@ message CanvasLayoutSetRequest {
   bool clear_fillmode = 3;
   bool clear_rotation = 4;
   bool clear_location = 5;
+  bool clear_scale = 6;
 }
 
 message CanvasLayoutSetResponse {
@@ -1182,6 +1186,7 @@ message DisplayLayoutSetRequest {
   bool clear_rotation = 6;
   uint64 display_id   = 7;
   bool clear_location = 8;
+  bool clear_scale = 9;
   reserved 5;
   reserved "clear_clear_rgba";
 }

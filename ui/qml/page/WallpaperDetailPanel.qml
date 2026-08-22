@@ -36,6 +36,7 @@ Item {
             locationX: 50,
             locationY: 50,
             rotation: 1,
+            scalePercent: 100,
             locationSet: true
         })
 
@@ -133,7 +134,10 @@ Item {
     function clampPercent(value) {
         return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
     }
-    function applyWallpaperLayout(fillmode, x, y, rotation) {
+    function clampScalePercent(value) {
+        return Math.max(25, Math.min(400, Math.round(Number(value) || 100)));
+    }
+    function applyWallpaperLayout(fillmode, x, y, rotation, scalePercent) {
         if (!root.wp)
             return;
         layoutSetQuery.wallpaperId = root.wallpaperId;
@@ -142,6 +146,7 @@ Item {
         layoutSetQuery.locationX = root.clampPercent(x);
         layoutSetQuery.locationY = root.clampPercent(y);
         layoutSetQuery.rotation = rotation;
+        layoutSetQuery.scalePercent = root.clampScalePercent(scalePercent);
         layoutSetQuery.reload();
     }
     function resetWallpaperLayout() {
@@ -756,6 +761,7 @@ Item {
                         readonly property int currentRotation: Number(layout.rotation ?? 1)
                         readonly property int currentX: root.clampPercent(layout.locationX ?? 50)
                         readonly property int currentY: root.clampPercent(layout.locationY ?? 50)
+                        readonly property int currentScalePercent: root.clampScalePercent(layout.scalePercent ?? 100)
                         readonly property bool locationEnabled: currentFillmode !== 1
 
                         ColumnLayout {
@@ -774,8 +780,32 @@ Item {
                                 model: root.kFillModeLabels
                                 currentIndex: root.fillmodeIndex(m_wallpaper_layout_flow.currentFillmode)
                                 onActivated: idx => {
-                                    root.applyWallpaperLayout(root.kFillModeValues[idx], m_wallpaper_layout_flow.currentX, m_wallpaper_layout_flow.currentY, m_wallpaper_layout_flow.currentRotation);
+                                    root.applyWallpaperLayout(root.kFillModeValues[idx], m_wallpaper_layout_flow.currentX, m_wallpaper_layout_flow.currentY, m_wallpaper_layout_flow.currentRotation, m_wallpaper_layout_flow.currentScalePercent);
                                 }
+                            }
+                        }
+
+                        ColumnLayout {
+                            width: Math.min(m_wallpaper_layout_flow.width, 260)
+                            spacing: 4
+
+                            MD.Text {
+                                text: qsTr("Scale")
+                                typescale: MD.Token.typescale.label_medium
+                                color: MD.Token.color.on_surface_variant
+                            }
+
+                            W.ValueSlider {
+                                id: wallpaperScale
+                                Layout.fillWidth: true
+                                from: 25
+                                to: 400
+                                stepSize: 1
+                                value: m_wallpaper_layout_flow.currentScalePercent
+                                valueText: root.clampScalePercent(value) + "%"
+                                valueMaxText: root.clampScalePercent(to) + "%"
+                                valueHorizontalAlignment: Text.AlignLeft
+                                onMoved: root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, m_wallpaper_layout_flow.currentX, m_wallpaper_layout_flow.currentY, m_wallpaper_layout_flow.currentRotation, value)
                             }
                         }
 
@@ -801,7 +831,7 @@ Item {
                                 valueText: root.clampPercent(value)
                                 valueMaxText: root.clampPercent(to).toString()
                                 valueHorizontalAlignment: Text.AlignLeft
-                                onMoved: root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, value, wallpaperVerticalLocation.value, m_wallpaper_layout_flow.currentRotation)
+                                onMoved: root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, value, wallpaperVerticalLocation.value, m_wallpaper_layout_flow.currentRotation, m_wallpaper_layout_flow.currentScalePercent)
                             }
                         }
 
@@ -827,7 +857,7 @@ Item {
                                 valueText: root.clampPercent(value)
                                 valueMaxText: root.clampPercent(to).toString()
                                 valueHorizontalAlignment: Text.AlignLeft
-                                onMoved: root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, wallpaperHorizontalLocation.value, value, m_wallpaper_layout_flow.currentRotation)
+                                onMoved: root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, wallpaperHorizontalLocation.value, value, m_wallpaper_layout_flow.currentRotation, m_wallpaper_layout_flow.currentScalePercent)
                             }
                         }
 
@@ -846,7 +876,7 @@ Item {
                                 size: MD.Enum.XS
 
                                 function applyRotation(rotationValue) {
-                                    root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, m_wallpaper_layout_flow.currentX, m_wallpaper_layout_flow.currentY, rotationValue);
+                                    root.applyWallpaperLayout(m_wallpaper_layout_flow.currentFillmode, m_wallpaper_layout_flow.currentX, m_wallpaper_layout_flow.currentY, rotationValue, m_wallpaper_layout_flow.currentScalePercent);
                                 }
                                 function isChecked(rotationValue) {
                                     return m_wallpaper_layout_flow.currentRotation === rotationValue;

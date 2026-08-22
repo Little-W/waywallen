@@ -36,7 +36,7 @@ private:
 /// `fillmodeSet` (true) + `fillmode` (int FillMode enum) to write a
 /// fillmode override; `clearFillmode = true` removes the override
 /// (revert to global default). Same pattern for `location*`,
-/// `align*`, and `rotation*`. Empty `name` is rejected by the daemon. The daemon re-emits
+/// `align*`, `rotation*`, and `scale*`. Empty `name` is rejected by the daemon. The daemon re-emits
 /// composition config to the live consumer and broadcasts a
 /// `DisplayChanged` event with the refreshed `effectiveLayout`.
 ///
@@ -58,6 +58,8 @@ export class DisplayLayoutSetQuery
     Q_PROPERTY(int align READ align WRITE setAlign NOTIFY paramsChanged FINAL)
     Q_PROPERTY(bool rotationSet READ rotationSet WRITE setRotationSet NOTIFY paramsChanged FINAL)
     Q_PROPERTY(int rotation READ rotation WRITE setRotation NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(bool scaleSet READ scaleSet WRITE setScaleSet NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(int scalePercent READ scalePercent WRITE setScalePercent NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
         bool clearFillmode READ clearFillmode WRITE setClearFillmode NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
@@ -65,6 +67,7 @@ export class DisplayLayoutSetQuery
     Q_PROPERTY(bool clearAlign READ clearAlign WRITE setClearAlign NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
         bool clearRotation READ clearRotation WRITE setClearRotation NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(bool clearScale READ clearScale WRITE setClearScale NOTIFY paramsChanged FINAL)
 
 public:
     DisplayLayoutSetQuery(QObject* parent = nullptr);
@@ -91,6 +94,10 @@ public:
     void setRotationSet(bool v);
     auto rotation() const -> int { return m_rotation; }
     void setRotation(int v);
+    auto scaleSet() const -> bool { return m_scale_set; }
+    void setScaleSet(bool v);
+    auto scalePercent() const -> int { return m_scale_percent; }
+    void setScalePercent(int v);
     auto clearFillmode() const -> bool { return m_clear_fillmode; }
     void setClearFillmode(bool v);
     auto clearLocation() const -> bool { return m_clear_location; }
@@ -99,6 +106,8 @@ public:
     void setClearAlign(bool v);
     auto clearRotation() const -> bool { return m_clear_rotation; }
     void setClearRotation(bool v);
+    auto clearScale() const -> bool { return m_clear_scale; }
+    void setClearScale(bool v);
 
     void reload() override;
 
@@ -116,10 +125,13 @@ private:
     int     m_align { 0 };
     bool    m_rotation_set { false };
     int     m_rotation { 0 };
+    bool    m_scale_set { false };
+    int     m_scale_percent { 100 };
     bool    m_clear_fillmode { false };
     bool    m_clear_location { false };
     bool    m_clear_align { false };
     bool    m_clear_rotation { false };
+    bool    m_clear_scale { false };
 };
 
 export class CanvasLayoutSetQuery : public Query,
@@ -135,12 +147,15 @@ export class CanvasLayoutSetQuery : public Query,
     Q_PROPERTY(int locationY READ locationY WRITE setLocationY NOTIFY paramsChanged FINAL)
     Q_PROPERTY(bool rotationSet READ rotationSet WRITE setRotationSet NOTIFY paramsChanged FINAL)
     Q_PROPERTY(int rotation READ rotation WRITE setRotation NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(bool scaleSet READ scaleSet WRITE setScaleSet NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(int scalePercent READ scalePercent WRITE setScalePercent NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
         bool clearFillmode READ clearFillmode WRITE setClearFillmode NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
         bool clearLocation READ clearLocation WRITE setClearLocation NOTIFY paramsChanged FINAL)
     Q_PROPERTY(
         bool clearRotation READ clearRotation WRITE setClearRotation NOTIFY paramsChanged FINAL)
+    Q_PROPERTY(bool clearScale READ clearScale WRITE setClearScale NOTIFY paramsChanged FINAL)
 
 public:
     CanvasLayoutSetQuery(QObject* parent = nullptr);
@@ -161,12 +176,18 @@ public:
     void setRotationSet(bool v);
     auto rotation() const -> int { return m_rotation; }
     void setRotation(int v);
+    auto scaleSet() const -> bool { return m_scale_set; }
+    void setScaleSet(bool v);
+    auto scalePercent() const -> int { return m_scale_percent; }
+    void setScalePercent(int v);
     auto clearFillmode() const -> bool { return m_clear_fillmode; }
     void setClearFillmode(bool v);
     auto clearLocation() const -> bool { return m_clear_location; }
     void setClearLocation(bool v);
     auto clearRotation() const -> bool { return m_clear_rotation; }
     void setClearRotation(bool v);
+    auto clearScale() const -> bool { return m_clear_scale; }
+    void setClearScale(bool v);
 
     void reload() override;
 
@@ -181,9 +202,12 @@ private:
     int     m_location_y { 50 };
     bool    m_rotation_set { false };
     int     m_rotation { 0 };
+    bool    m_scale_set { false };
+    int     m_scale_percent { 100 };
     bool    m_clear_fillmode { false };
     bool    m_clear_location { false };
     bool    m_clear_rotation { false };
+    bool    m_clear_scale { false };
 };
 
 export class DisplayRenameQuery : public Query,

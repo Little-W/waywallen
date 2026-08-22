@@ -130,6 +130,14 @@ impl Location {
     }
 }
 
+pub const MIN_SCALE_PERCENT: u16 = 10;
+pub const MAX_SCALE_PERCENT: u16 = 400;
+pub const DEFAULT_SCALE_PERCENT: u16 = 100;
+
+pub fn normalize_scale_percent(value: u32) -> u16 {
+    value.clamp(u32::from(MIN_SCALE_PERCENT), u32::from(MAX_SCALE_PERCENT)) as u16
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct LayoutInput {
     pub tex_w: f32,
@@ -138,6 +146,9 @@ pub struct LayoutInput {
     pub disp_h: f32,
     pub fillmode: FillMode,
     pub location: Location,
+    /// Content scale after the fill-mode geometry is resolved. `100` keeps
+    /// the existing size; the location anchors a scaled result.
+    pub scale_percent: u16,
     pub clear_rgba: [f32; 4],
 }
 
@@ -162,7 +173,7 @@ pub fn compute(i: LayoutInput) -> LayoutOutput {
         };
     }
 
-    match i.fillmode {
+    let mut output = match i.fillmode {
         FillMode::Stretched => LayoutOutput {
             source: (0.0, 0.0, i.tex_w, i.tex_h),
             dest: (0.0, 0.0, i.disp_w, i.disp_h),
@@ -208,7 +219,30 @@ pub fn compute(i: LayoutInput) -> LayoutOutput {
                 clear_rgba: i.clear_rgba,
             }
         }
+    };
+    apply_scale(&mut output, i.disp_w, i.disp_h, i.location, i.scale_percent);
+    output
+}
+
+fn apply_scale(
+    output: &mut LayoutOutput,
+    display_width: f32,
+    display_height: f32,
+    location: Location,
+    scale_percent: u16,
+) {
+    let factor = f32::from(normalize_scale_percent(u32::from(scale_percent))) / 100.0;
+    if (factor - 1.0).abs() < f32::EPSILON {
+        return;
     }
+    let width = output.dest.2 * factor;
+    let height = output.dest.3 * factor;
+    output.dest = (
+        (display_width - width) * location.h_factor(),
+        (display_height - height) * location.v_factor(),
+        width,
+        height,
+    );
 }
 
 /// Map an actual display-surface point to renderer-texture-local pixels.
@@ -291,6 +325,7 @@ mod tests {
             disp_h: disp.1,
             fillmode,
             location: Location::from_align(align),
+            scale_percent: DEFAULT_SCALE_PERCENT,
             clear_rgba: [0.0, 0.0, 0.0, 1.0],
         }
     }
@@ -308,6 +343,7 @@ mod tests {
             disp_h: disp.1,
             fillmode,
             location,
+            scale_percent: DEFAULT_SCALE_PERCENT,
             clear_rgba: [0.0, 0.0, 0.0, 1.0],
         }
     }
@@ -329,6 +365,26 @@ mod tests {
             Align::BottomRight,
         ));
         assert_eq!(out, out2);
+    }
+
+    #[test]
+    fn scale_resizes_content_around_the_requested_location() {
+        let mut centered = input(
+            (1920.0, 1080.0),
+            (800.0, 600.0),
+            FillMode::Stretched,
+            Align::Center,
+        );
+        centered.scale_percent = 200;
+        let out = compute(centered);
+        assert_eq!(out.source, (0.0, 0.0, 1920.0, 1080.0));
+        assert_eq!(out.dest, (-400.0, -300.0, 1600.0, 1200.0));
+
+        let mut top_left = centered;
+        top_left.location = Location::from_align(Align::TopLeft);
+        top_left.scale_percent = 50;
+        let out = compute(top_left);
+        assert_eq!(out.dest, (0.0, 0.0, 400.0, 300.0));
     }
 
     #[test]

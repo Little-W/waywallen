@@ -112,6 +112,10 @@ location = { x = 25, y = 75 }
     assert_eq!(s.global.layout.fillmode, FillMode::PreserveAspectCrop);
     assert_eq!(s.global.layout.align, Align::TopRight);
     assert_eq!(s.global.layout.location, Some(Location::new(25, 75)));
+    assert_eq!(
+        s.global.layout.scale_percent,
+        crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT
+    );
 }
 
 #[test]
@@ -141,6 +145,10 @@ async fn resolved_layout_falls_back_field_by_field() {
     let r = store.resolved_layout("eDP-1");
     assert_eq!(r.fillmode, FillMode::default());
     assert_eq!(r.location, Location::from_align(Align::default()));
+    assert_eq!(
+        r.scale_percent,
+        crate::wallframe::display::layout::DEFAULT_SCALE_PERCENT
+    );
 
     // Set a partial override for "eDP-1" (only fillmode).
     store.update(|s| {
@@ -149,6 +157,7 @@ async fn resolved_layout_falls_back_field_by_field() {
             "eDP-1".into(),
             DisplayPrefs {
                 fillmode: Some(FillMode::PreserveAspectCrop),
+                scale_percent: Some(150),
                 ..Default::default()
             },
         );
@@ -157,6 +166,7 @@ async fn resolved_layout_falls_back_field_by_field() {
     let r = store.resolved_layout("eDP-1");
     assert_eq!(r.fillmode, FillMode::PreserveAspectCrop); // override
     assert_eq!(r.location, Location::new(20, 80)); // global
+    assert_eq!(r.scale_percent, 150); // override
 }
 
 #[test]
@@ -328,6 +338,7 @@ fn canvas_runtime_layout_and_member_size_do_not_change_topology_revision() {
         fillmode: Some(FillMode::PreserveAspectFit),
         location: Some(Location::new(25, 75)),
         rotation: Some(Rotation::Cw90),
+        scale_percent: Some(150),
     };
 
     assert!(store

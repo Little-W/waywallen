@@ -431,6 +431,10 @@
         <translation>填充模式</translation>
     </message>
     <message>
+        <source>Scale</source>
+        <translation>缩放</translation>
+    </message>
+    <message>
         <source>Horizontal</source>
         <translation>水平</translation>
     </message>
@@ -1749,6 +1753,10 @@ Unsaved frame state may be lost.</source>
     <message>
         <source>Fill mode</source>
         <translation>填充模式</translation>
+    </message>
+    <message>
+        <source>Scale</source>
+        <translation>缩放</translation>
     </message>
     <message>
         <source>Horizontal</source>

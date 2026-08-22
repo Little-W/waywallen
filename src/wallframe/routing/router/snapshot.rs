@@ -80,6 +80,7 @@ pub(super) fn project_link(
             disp_h: eff_disp_h,
             fillmode: layout.fillmode,
             location: layout.location,
+            scale_percent: layout.scale_percent,
             clear_rgba: link.clear_rgba,
         });
         return CompositionConfig {
