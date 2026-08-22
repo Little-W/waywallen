@@ -32,6 +32,15 @@
       }
     },
     {
+      "name": "clang-release-rpm",
+      "displayName": "Clang · Release RPM bundle",
+      "description": "Release package build with QmlMaterial bundled for standalone installation",
+      "inherits": "clang-release",
+      "cacheVariables": {
+        "CMAKE_DISABLE_FIND_PACKAGE_qml_material": "ON"
+      }
+    },
+    {
       "name": "clang-relwithdebinfo",
       "displayName": "Clang · RelWithDebInfo",
       "inherits": "_clang-base",
@@ -67,6 +76,7 @@
   "buildPresets": [
     { "name": "clang-debug",            "configurePreset": "clang-debug" },
     { "name": "clang-release",          "configurePreset": "clang-release" },
+    { "name": "clang-release-rpm",      "configurePreset": "clang-release-rpm" },
     { "name": "clang-relwithdebinfo",   "configurePreset": "clang-relwithdebinfo" },
     { "name": "clang-release-qml",      "configurePreset": "clang-release-qml" },
     { "name": "clang-release-renderdoc","configurePreset": "clang-release-renderdoc" },
@@ -99,7 +109,7 @@
     },
     {
       "name": "clang-release-rpm",
-      "configurePreset": "clang-release",
+      "configurePreset": "clang-release-rpm",
       "generators": ["RPM"]
     }
   ]
