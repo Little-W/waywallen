@@ -55,10 +55,14 @@ public:
     /// tasks currently in `Running`.
     Q_PROPERTY(quint32 activeTaskCount READ activeTaskCount NOTIFY statusChanged FINAL)
     /// Mirrors `StatusSync.phase`. Default `Starting` — UI shows a
-    /// startup dialog until this flips to `Ready`. Reset to
-    /// `Starting` when the WS disconnects so a daemon restart triggers
-    /// the dialog again.
+    /// startup dialog only after the first authoritative status snapshot
+    /// arrives. Reset to `Starting` when the WS disconnects so a daemon
+    /// restart triggers the dialog again.
     Q_PROPERTY(DaemonPhase daemonPhase READ daemonPhase NOTIFY statusChanged FINAL)
+    /// Whether the daemon has sent at least one StatusSync on the current
+    /// backend connection. This distinguishes the initial QML default from a
+    /// daemon that has actually reported its startup state.
+    Q_PROPERTY(bool hasStatusSnapshot READ hasStatusSnapshot NOTIFY statusChanged FINAL)
     Q_PROPERTY(waywallen::control::v1::DisplayBackendStatus displayBackend READ displayBackend
                    NOTIFY statusChanged FINAL)
     Q_PROPERTY(bool globalPaused READ globalPaused NOTIFY statusChanged FINAL)
@@ -77,6 +81,7 @@ public:
     auto scanInProgress() const -> bool { return m_scan_in_progress; }
     auto activeTaskCount() const -> quint32 { return m_active_task_count; }
     auto daemonPhase() const -> DaemonPhase { return m_daemon_phase; }
+    auto hasStatusSnapshot() const -> bool { return m_has_status_snapshot; }
     auto displayBackend() const -> const control::v1::DisplayBackendStatus& {
         return m_display_backend;
     }
@@ -138,6 +143,7 @@ private:
     bool                                 m_scan_in_progress { false };
     quint32                              m_active_task_count { 0 };
     DaemonPhase                          m_daemon_phase { DaemonPhase::Starting };
+    bool                                 m_has_status_snapshot { false };
     control::v1::DisplayBackendStatus    m_display_backend;
     bool                                 m_global_paused { false };
     bool                                 m_global_muted { false };

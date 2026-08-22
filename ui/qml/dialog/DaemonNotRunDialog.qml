@@ -9,15 +9,29 @@ import waywallen.ui as W
 MD.Popup {
     id: root
 
-    // Dialog is the single anchor for "daemon is not usable yet". It
-    // wins on either of two orthogonal conditions:
-    //   - DBus says the daemon process is missing / version-mismatched
-    //   - DBus is connected but the daemon's `phase` is still Starting
-    //     (WS not bound yet, or core services still booting)
-    readonly property bool dbusConnected: W.DaemonDBusClient.status === W.DaemonDBusClient.Connected
-    readonly property bool daemonStarting: dbusConnected && W.Notify.daemonPhase !== W.Notify.DaemonPhase.Ready
+    mdState.backgroundColor: W.Global.cupertinoCard
+    MD.MProp.backgroundColor: W.Global.cupertinoCard
+    background: W.CupertinoSurface {
+        frosted: W.App.frostedGlassAvailable
+        surfaceColor: W.Global.cupertinoCard
+        glassOpacity: 0.98
+        cornerRadius: 18
+        borderOpacity: 0.10
+        elevation: MD.Token.elevation.level2
+    }
 
-    visible: !dbusConnected || daemonStarting
+    // Dialog is the single anchor for "daemon is not usable yet".  Do not
+    // confuse Notify's initial `Starting` default with an actual startup
+    // condition: wait for a StatusSync or a short probe grace period before
+    // showing it.  This removes the one-frame startup flash while keeping a
+    // real daemon failure visible shortly afterwards.
+    readonly property bool dbusConnected: W.DaemonDBusClient.status === W.DaemonDBusClient.Connected
+    property bool startupProbeElapsed: false
+    readonly property bool daemonStateKnown: W.Notify.hasStatusSnapshot || startupProbeElapsed
+    readonly property bool daemonStarting: dbusConnected && daemonStateKnown
+                                               && W.Notify.daemonPhase !== W.Notify.DaemonPhase.Ready
+
+    visible: daemonStateKnown && (!dbusConnected || daemonStarting)
     closePolicy: T.Popup.NoAutoClose
     dim: true
     modal: true
@@ -25,6 +39,12 @@ MD.Popup {
     x: Math.round((parent.width - width) / 2)
     y: Math.round((parent.height - height) / 2)
     bottomPadding: 24
+
+    Timer {
+        interval: 700
+        running: !root.startupProbeElapsed
+        onTriggered: root.startupProbeElapsed = true
+    }
 
     function refreshProcs() {
         m_proc_model.clear();
@@ -116,7 +136,7 @@ MD.Popup {
                 text: cmdline
                 elide: Text.ElideLeft
                 background: MD.Rectangle {
-                    color: root.MD.MProp.color.surface
+                    color: W.Global.cupertinoCard
                     corners: MD.Util.listCorners(index, count, 16)
                 }
 
