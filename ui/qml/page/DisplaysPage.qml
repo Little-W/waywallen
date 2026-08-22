@@ -7,7 +7,7 @@ import QtQuick.Templates as T
 import Qcm.Material as MD
 import waywallen.ui as W
 
-MD.Page {
+W.CupertinoPage {
     id: root
 
     title: qsTr('Displays')
@@ -17,6 +17,19 @@ MD.Page {
     readonly property real canvasHeaderPx: 36
     readonly property real canvasPaddingPx: 8
     readonly property real canvasSnapPx: 12
+    // The layout canvas is a work surface rather than a stack of Material
+    // cards.  Keep its fills, outlines and labels neutral; only selection
+    // receives the user-selected accent.
+    readonly property color canvasText: W.Global.cupertinoDark ? "#F5F5F7" : "#1C1C1E"
+    readonly property color canvasSecondaryText: W.Global.cupertinoDark ? "#98989D" : "#6C6C70"
+    readonly property color canvasAccentFill: Qt.rgba(W.Global.effectiveAccentColor.r,
+                                                       W.Global.effectiveAccentColor.g,
+                                                       W.Global.effectiveAccentColor.b,
+                                                       W.Global.cupertinoDark ? 0.28 : 0.14)
+    readonly property color canvasOutline: Qt.rgba(W.Global.cupertinoBorder.r,
+                                                    W.Global.cupertinoBorder.g,
+                                                    W.Global.cupertinoBorder.b,
+                                                    0.70)
 
     property string selectedKind: ""
     property var selectedId: null
@@ -25,7 +38,10 @@ MD.Page {
     property var currentWallpaperPresentation: null
     readonly property bool detailsVisible: !!root.selectedDisplayObject || !!root.selectedCanvasObject
     readonly property real paneSpacing: 12
-    readonly property real paneAvailableHeight: Math.max(0, height - paneSpacing - (detailsVisible ? paneSpacing / 2 : 0))
+    readonly property real paneAvailableHeight: Math.max(0, height
+                                                          - W.Global.compactNavigationInset
+                                                          - paneSpacing
+                                                          - (detailsVisible ? paneSpacing / 2 : 0))
     readonly property real displayPaneHeight: detailsVisible ? paneAvailableHeight / 2 : paneAvailableHeight
     readonly property real detailPaneHeight: detailsVisible ? paneAvailableHeight - displayPaneHeight : 0
 
@@ -306,7 +322,7 @@ MD.Page {
         onTriggered: root.applyCanvasDraft()
     }
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: deleteCanvasDialog
         parent: T.Overlay.overlay
         modal: true
@@ -324,7 +340,7 @@ MD.Page {
         }
     }
 
-    MD.Dialog {
+    W.CupertinoDialog {
         id: resetDisplaySettingsDialog
         parent: T.Overlay.overlay
         modal: true
@@ -566,7 +582,7 @@ MD.Page {
             onTriggered: root.paneAnimationsEnabled = true
         }
 
-        MD.Pane {
+        W.CupertinoPane {
             id: displaysPane
             x: 0
             y: root.paneSpacing / 2
@@ -575,7 +591,7 @@ MD.Page {
             horizontalPadding: 24
             verticalPadding: 16
             radius: 16
-            backgroundColor: MD.MProp.color.surface
+            backgroundColor: W.Global.cupertinoCard
 
             Behavior on height {
                 enabled: root.paneAnimationsEnabled
@@ -782,9 +798,13 @@ MD.Page {
                                 antialiasing: true
 
                                 ShapePath {
-                                    strokeColor: targetItem.isSelected ? MD.Token.color.primary : (targetItem.modelData.placed ? MD.Token.color.outline : MD.Token.color.error)
-                                    strokeWidth: targetItem.isSelected ? 3 : 1.5
-                                    fillColor: targetItem.hasLink ? MD.Token.color.primary_container : MD.Token.color.surface_container_highest
+                                    strokeColor: targetItem.isSelected
+                                        ? W.Global.effectiveAccentColor
+                                        : (targetItem.modelData.placed ? root.canvasOutline : MD.Token.color.error)
+                                    strokeWidth: targetItem.isSelected ? 2 : 1
+                                    fillColor: targetItem.hasLink || targetItem.isSelected
+                                        ? root.canvasAccentFill
+                                        : W.Global.cupertinoControlFill
                                     capStyle: ShapePath.RoundCap
                                     joinStyle: ShapePath.RoundJoin
 
@@ -793,7 +813,7 @@ MD.Page {
                                         y: 0
                                         width: targetItem.width
                                         height: targetItem.height
-                                        radius: 10
+                                        radius: 6
                                     }
                                 }
                             }
@@ -814,7 +834,7 @@ MD.Page {
                                     Layout.fillWidth: true
                                     text: targetItem.d?.displayLabel || qsTr("Display #%1").arg(targetItem.d?.id)
                                     typescale: MD.Token.typescale.title_small
-                                    color: targetItem.hasLink ? MD.Token.color.on_primary_container : MD.Token.color.on_surface
+                                    color: root.canvasText
                                     horizontalAlignment: Text.AlignHCenter
                                     maximumLineCount: 2
                                     wrapMode: Text.Wrap
@@ -825,7 +845,7 @@ MD.Page {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: (targetItem.d?.width || 0) + " × " + (targetItem.d?.height || 0)
                                     typescale: MD.Token.typescale.label_medium
-                                    color: targetItem.hasLink ? MD.Token.color.on_primary_container : MD.Token.color.on_surface_variant
+                                    color: root.canvasSecondaryText
                                 }
                             }
 
@@ -836,7 +856,7 @@ MD.Page {
                                 anchors.margins: 6
                                 text: "#" + (targetItem.d?.id || "")
                                 typescale: MD.Token.typescale.label_small
-                                color: targetItem.hasLink ? MD.Token.color.on_primary_container : MD.Token.color.on_surface_variant
+                                color: root.canvasSecondaryText
                             }
 
                             W.GpuTag {
@@ -870,10 +890,14 @@ MD.Page {
                             id: canvasFrame
                             visible: targetItem.isCanvas
                             anchors.fill: parent
-                            radius: 12
-                            color: targetItem.hasLink ? MD.Token.color.secondary_container : MD.Token.color.surface_container_highest
-                            border.width: canvasDropArea.containsDrag || targetItem.isSelected ? 3 : 1.5
-                            border.color: canvasDropArea.containsDrag || targetItem.isSelected ? MD.Token.color.primary : MD.Token.color.outline
+                            radius: 6
+                            color: targetItem.hasLink || targetItem.isSelected
+                                ? root.canvasAccentFill
+                                : W.Global.cupertinoControlFill
+                            border.width: canvasDropArea.containsDrag || targetItem.isSelected ? 2 : 1
+                            border.color: canvasDropArea.containsDrag || targetItem.isSelected
+                                ? W.Global.effectiveAccentColor
+                                : root.canvasOutline
                         }
 
                         Rectangle {
@@ -901,7 +925,7 @@ MD.Page {
                                 MD.Icon {
                                     name: MD.Token.icon.dashboard
                                     size: 18
-                                    color: targetItem.hasLink ? MD.Token.color.on_secondary_container : MD.Token.color.on_surface
+                                    color: root.canvasText
                                 }
 
                                 MD.Text {
@@ -909,7 +933,7 @@ MD.Page {
                                     Layout.minimumWidth: 0
                                     text: targetItem.canvasObject?.name || qsTr("Unnamed canvas")
                                     typescale: MD.Token.typescale.label_medium
-                                    color: targetItem.hasLink ? MD.Token.color.on_secondary_container : MD.Token.color.on_surface
+                                    color: root.canvasText
                                     maximumLineCount: 1
                                     wrapMode: Text.NoWrap
                                     elide: Text.ElideRight
@@ -918,17 +942,10 @@ MD.Page {
                                 MD.Text {
                                     text: targetItem.canvasMembers.length + " · " + targetItem.modelData.w + " × " + targetItem.modelData.h
                                     typescale: MD.Token.typescale.label_small
-                                    color: targetItem.hasLink ? MD.Token.color.on_secondary_container : MD.Token.color.on_surface_variant
+                                    color: root.canvasSecondaryText
                                 }
                             }
 
-                            Rectangle {
-                                x: targetItem.verticalCanvasHeader ? parent.width - 1 : 8
-                                y: targetItem.verticalCanvasHeader ? 8 : parent.height - 1
-                                width: targetItem.verticalCanvasHeader ? 1 : Math.max(0, parent.width - 16)
-                                height: targetItem.verticalCanvasHeader ? Math.max(0, parent.height - 16) : 1
-                                color: MD.Token.color.outline_variant
-                            }
                         }
 
                         Rectangle {
@@ -964,7 +981,7 @@ MD.Page {
                                 visible: targetItem.canvasMembers.length === 0
                                 text: qsTr("Empty canvas")
                                 typescale: MD.Token.typescale.body_medium
-                                color: targetItem.hasLink ? MD.Token.color.on_secondary_container : MD.Token.color.on_surface_variant
+                                color: root.canvasSecondaryText
                             }
 
                             Repeater {
@@ -995,10 +1012,10 @@ MD.Page {
                                     width: modelData.width * canvas.viewScale
                                     height: modelData.height * canvas.viewScale
                                     z: dragging ? 100 : 0
-                                    radius: 8
-                                    color: selected ? MD.Token.color.primary_container : MD.Token.color.surface_container_highest
-                                    border.width: 1
-                                    border.color: MD.Token.color.outline_variant
+                                    radius: 4
+                                    color: selected ? root.canvasAccentFill : W.Global.cupertinoControlFill
+                                    border.width: selected ? 1.5 : 1
+                                    border.color: selected ? W.Global.effectiveAccentColor : root.canvasOutline
 
                                     DragHandler {
                                         id: memberDrag
@@ -1042,7 +1059,7 @@ MD.Page {
                                             horizontalAlignment: Text.AlignHCenter
                                             elide: Text.ElideMiddle
                                             typescale: MD.Token.typescale.label_medium
-                                            color: memberItem.selected ? MD.Token.color.on_primary_container : MD.Token.color.on_surface
+                                            color: root.canvasText
                                         }
 
                                         MD.Text {
@@ -1052,7 +1069,7 @@ MD.Page {
                                             horizontalAlignment: Text.AlignHCenter
                                             elide: Text.ElideRight
                                             typescale: MD.Token.typescale.label_small
-                                            color: memberItem.selected ? MD.Token.color.on_primary_container : MD.Token.color.on_surface_variant
+                                            color: root.canvasSecondaryText
                                         }
                                     }
                                 }
@@ -1064,7 +1081,7 @@ MD.Page {
         }
 
         // --- Details panel ---
-        MD.Pane {
+        W.CupertinoPane {
             id: detailsPane
             anchors.top: displaysPane.bottom
             anchors.topMargin: root.paneSpacing
@@ -1074,7 +1091,7 @@ MD.Page {
 
             radius: 16
             corners: MD.Util.corners(radius, radius, 0, 0)
-            backgroundColor: MD.MProp.color.surface
+            backgroundColor: W.Global.cupertinoCard
             clip: true
 
             Behavior on height {
@@ -1488,7 +1505,7 @@ MD.Page {
                                     color: MD.Token.color.on_surface_variant
                                 }
 
-                                MD.ComboBox {
+                                W.CupertinoComboBox {
                                     id: fillmodeBox
                                     Layout.fillWidth: true
                                     mdState.size: MD.Enum.S
@@ -1661,22 +1678,14 @@ MD.Page {
                                     color: MD.Token.color.on_surface
                                 }
 
-                                MD.Button {
-                                    visible: currentWallpaperCard.hasAssignment
-                                    text: qsTr("Wallpaper settings")
-                                    icon.name: MD.Token.icon.tune
-                                    mdState.type: MD.Enum.BtFilledTonal
-                                    enabled: !currentWallpaperQuery.querying
-                                    onClicked: root.openCurrentWallpaperSettings()
-                                }
                             }
 
-                            MD.Pane {
+                            W.CupertinoPane {
                                 Layout.fillWidth: true
                                 visible: currentWallpaperCard.hasAssignment
                                 padding: 8
                                 radius: 12
-                                backgroundColor: MD.Token.color.surface_container
+                                backgroundColor: W.Global.cupertinoCard
 
                                 contentItem: RowLayout {
                                     spacing: 12

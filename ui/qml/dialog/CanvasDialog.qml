@@ -2,8 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import Qcm.Material as MD
+import waywallen.ui as W
 
-MD.Dialog {
+W.CupertinoDialog {
     id: control
 
     property string originalName: ""
