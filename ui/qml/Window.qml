@@ -38,6 +38,13 @@ MD.ApplicationWindow {
     property var pluginsPresentation: null
     property var settingsPresentation: null
     property var aboutPresentation: null
+    // PageContainer starts with an empty placeholder and asynchronously
+    // replaces it with the first real page.  Qcm normally applies its
+    // replace transition to that operation, including a 0.92 -> 1.0 scale
+    // animation which makes every wallpaper card appear to fly in.  Keep the
+    // transition disabled until the first cached page has been installed;
+    // later navigation retains Qcm's normal motion.
+    property bool contentPageTransitionsEnabled: false
 
     function presentPopup(source, properties) {
         const presentation = m_popup_presenter.present(source, properties || {});
@@ -673,6 +680,19 @@ MD.ApplicationWindow {
                         clip: true
                         initialItem: Item {}
 
+                        replaceEnter: MD.FadeInThroughMotion {
+                            enabled: win.contentPageTransitionsEnabled
+                        }
+                        replaceExit: MD.FadeOutThroughMotion {
+                            enabled: win.contentPageTransitionsEnabled
+                        }
+
+                        onCurrentKeyChanged: {
+                            if (!win.contentPageTransitionsEnabled
+                                    && currentKey.length > 0)
+                                initialPageTransitionGuard.restart();
+                        }
+
                         MD.MProp.page: m_page_ctx
 
                         MD.PageContext {
@@ -681,6 +701,17 @@ MD.ApplicationWindow {
                             backgroundRadius: 0
                             showBackground: false
                         }
+                    }
+
+                    Timer {
+                        id: initialPageTransitionGuard
+
+                        // Wait through the transition which would have been
+                        // selected for the initial replacement before arming
+                        // animations for user-initiated navigation.
+                        interval: MD.Token.duration.medium2 + 1
+                        repeat: false
+                        onTriggered: win.contentPageTransitionsEnabled = true
                     }
                 }
             }
