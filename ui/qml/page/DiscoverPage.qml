@@ -772,10 +772,10 @@ W.CupertinoPage {
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        anchors.right: parent.right
                         // discoverGridViewport performs the animated clipping;
                         // keep GridView's own layout viewport at the final
                         // master/detail width throughout the transition.
+                        width: _targetViewportWidth
                         clip: false
                         // Match the wallpaper library's native touchpad path.
                         // Qcm's touch-oriented synchronous drag turns the first
@@ -921,6 +921,9 @@ W.CupertinoPage {
                                 _cols = _calculatedCols;
                                 return;
                             }
+                            const anchoredClose = !open
+                                                  && root.detailCloseAnchorActive
+                                                  && currentIndex >= 0;
                             const originalContentY = contentY;
                             columnReflowActive = false;
                             columnReflowActive = true;
@@ -934,6 +937,13 @@ W.CupertinoPage {
                                                     GridView.Center);
                                 const targetContentY = contentY;
                                 contentY = originalContentY;
+                                // WallpaperPage commits the reverse target
+                                // before the panel reaches zero. Do the same
+                                // here so closing is the temporal inverse of
+                                // opening rather than a second scroll after
+                                // the cards have already expanded.
+                                if (anchoredClose)
+                                    root.restoreDetailFocusPending = false;
                                 root.smoothDetailFocusPending = false;
                                 discoverDetailContentYAnimation.from =
                                     originalContentY;
