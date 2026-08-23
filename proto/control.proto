@@ -98,6 +98,7 @@ message Request {
     CanvasUpdateRequest         canvas_update = 81;
     CanvasDeleteRequest         canvas_delete = 82;
     CanvasLayoutSetRequest      canvas_layout_set = 83;
+    CanvasMemberConfigureRequest canvas_member_configure = 84;
   }
 }
 
@@ -183,6 +184,7 @@ message Response {
     CanvasUpdateResponse        canvas_update = 81;
     Empty                       canvas_delete = 82;
     CanvasLayoutSetResponse     canvas_layout_set = 83;
+    CanvasMemberConfigureResponse canvas_member_configure = 84;
   }
 }
 
@@ -807,14 +809,24 @@ message DisplayInfo {
 message CanvasRect {
   sint32 x = 1;
   sint32 y = 2;
+  // Canvas source-space Scale to size, not the live surface metrics.
   uint32 width = 3;
   uint32 height = 4;
+}
+
+message CanvasSize {
+  uint32 width = 1;
+  uint32 height = 2;
 }
 
 message CanvasMemberInfo {
   string settings_key = 1;
   CanvasRect rect = 2;
   repeated uint64 display_ids = 3;
+  // Component-wise maximum live surface size for this stable member.
+  // Absent while the member is offline.
+  CanvasSize minimum_scale_to = 4;
+  bool aspect_locked = 5;
 }
 
 message CanvasInfo {
@@ -830,7 +842,9 @@ message CanvasInfo {
 
 message CanvasMemberInput {
   string settings_key = 1;
+  // rect.width/height is the persisted source-space Scale to size.
   CanvasRect rect = 2;
+  bool aspect_locked = 3;
 }
 
 message CanvasListRequest {}
@@ -858,6 +872,24 @@ message CanvasUpdateRequest {
   reserved "layout_override", "reset_layout_override";
 }
 message CanvasUpdateResponse {
+  CanvasInfo canvas = 1;
+  uint64 revision = 2;
+}
+
+message CanvasMemberConfigureRequest {
+  string canvas_id = 1;
+  uint64 expected_revision = 2;
+  string settings_key = 3;
+  oneof size_change {
+    uint32 width = 4;
+    uint32 height = 5;
+    bool reset_size = 6;
+  }
+  bool aspect_locked_set = 7;
+  bool aspect_locked = 8;
+}
+
+message CanvasMemberConfigureResponse {
   CanvasInfo canvas = 1;
   uint64 revision = 2;
 }

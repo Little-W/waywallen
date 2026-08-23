@@ -94,6 +94,45 @@
     </message>
 </context>
 <context>
+    <name>CanvasDisplayList</name>
+    <message>
+        <source>Canvas display update failed</source>
+        <translation>Не удалось обновить монитор холста</translation>
+    </message>
+    <message>
+        <source>Displays</source>
+        <translation>Мониторы</translation>
+    </message>
+    <message>
+        <source>Original %1 × %2</source>
+        <translation>Исходный размер %1 × %2</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Не в сети</translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation>Ширина</translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation>Высота</translation>
+    </message>
+    <message>
+        <source>Unlock aspect ratio</source>
+        <translation>Разблокировать соотношение сторон</translation>
+    </message>
+    <message>
+        <source>Lock aspect ratio</source>
+        <translation>Заблокировать соотношение сторон</translation>
+    </message>
+    <message>
+        <source>Reset to original size</source>
+        <translation>Сбросить до исходного размера</translation>
+    </message>
+</context>
+<context>
     <name>ContentRatingFilter</name>
     <message>
         <source>is</source>
@@ -254,6 +293,37 @@
     </message>
 </context>
 <context>
+    <name>DisplayLayoutControls</name>
+    <message>
+        <source>Layout</source>
+        <translation>Расположение</translation>
+    </message>
+    <message>
+        <source>Wallpaper override</source>
+        <translation>Задано обоями</translation>
+    </message>
+    <message>
+        <source>Revert to global default</source>
+        <translation>Вернуть общее значение</translation>
+    </message>
+    <message>
+        <source>Fill mode</source>
+        <translation>Режим заполнения</translation>
+    </message>
+    <message>
+        <source>Horizontal</source>
+        <translation>По горизонтали</translation>
+    </message>
+    <message>
+        <source>Vertical</source>
+        <translation>По вертикали</translation>
+    </message>
+    <message>
+        <source>Rotation</source>
+        <translation>Поворот</translation>
+    </message>
+</context>
+<context>
     <name>DisplaysPage</name>
     <message>
         <source>Displays</source>
@@ -290,6 +360,14 @@
     <message>
         <source>The canvas layout will be removed. Its displays become independent again.</source>
         <translation>Компоновка холста будет удалена. Его дисплеи снова станут независимыми.</translation>
+    </message>
+    <message>
+        <source>Revert layout settings?</source>
+        <translation>Вернуть настройки макета?</translation>
+    </message>
+    <message>
+        <source>The settings for this layout will be reverted to the global default. Your custom configuration will be lost.</source>
+        <translation>Настройки этого макета будут возвращены к глобальным значениям по умолчанию. Пользовательская конфигурация будет потеряна.</translation>
     </message>
     <message>
         <source>Refresh displays</source>
@@ -378,58 +456,6 @@
     <message>
         <source>Canvas</source>
         <translation>Холст</translation>
-    </message>
-    <message>
-        <source>Connected</source>
-        <translation>Подключено</translation>
-    </message>
-    <message>
-        <source>Assigned</source>
-        <translation>Назначено</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n min left</source>
-        <translation>
-            <numerusform>осталась %n минута</numerusform>
-            <numerusform>осталось %n минуты</numerusform>
-            <numerusform>осталось %n минут</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Idle</source>
-        <translation>Простой</translation>
-    </message>
-    <message>
-        <source>Playlist #%1</source>
-        <translation>Плейлист №%1</translation>
-    </message>
-    <message>
-        <source>Layout</source>
-        <translation>Расположение</translation>
-    </message>
-    <message>
-        <source>Wallpaper override</source>
-        <translation>Задано обоями</translation>
-    </message>
-    <message>
-        <source>Revert to global default</source>
-        <translation>Вернуть общее значение</translation>
-    </message>
-    <message>
-        <source>Fill mode</source>
-        <translation>Режим заполнения</translation>
-    </message>
-    <message>
-        <source>Horizontal</source>
-        <translation>По горизонтали</translation>
-    </message>
-    <message>
-        <source>Vertical</source>
-        <translation>По вертикали</translation>
-    </message>
-    <message>
-        <source>Rotation</source>
-        <translation>Поворот</translation>
     </message>
 </context>
 <context>
@@ -1101,6 +1127,33 @@
     </message>
 </context>
 <context>
+    <name>RendererConnectionPanel</name>
+    <message numerus="yes">
+        <source>%n min left</source>
+        <translation>
+            <numerusform>осталась %n минута</numerusform>
+            <numerusform>осталось %n минуты</numerusform>
+            <numerusform>осталось %n минут</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Подключено</translation>
+    </message>
+    <message>
+        <source>Assigned</source>
+        <translation>Назначено</translation>
+    </message>
+    <message>
+        <source>Idle</source>
+        <translation>Простой</translation>
+    </message>
+    <message>
+        <source>Playlist #%1</source>
+        <translation>Плейлист #%1</translation>
+    </message>
+</context>
+<context>
     <name>RuntimeConditionTag</name>
     <message>
         <source>Loading</source>
@@ -1177,6 +1230,14 @@ Related display: #%1</source>
     <message>
         <source>Reset</source>
         <translation>Сбросить</translation>
+    </message>
+    <message>
+        <source>Reset settings?</source>
+        <translation>Сбросить настройки?</translation>
+    </message>
+    <message>
+        <source>All settings will be reset to their defaults. Your custom configuration will be lost.</source>
+        <translation>Все настройки будут сброшены до значений по умолчанию. Пользовательская конфигурация будет потеряна.</translation>
     </message>
     <message>
         <source>Failed to update login startup</source>

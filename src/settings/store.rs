@@ -8,6 +8,19 @@ pub struct CanvasDraft {
     pub layout: Option<CanvasLayoutPrefs>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum CanvasMemberSizeChange {
+    Width(u32),
+    Height(u32),
+    Reset,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CanvasMemberConfig {
+    pub size: Option<CanvasMemberSizeChange>,
+    pub aspect_locked: Option<bool>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CanvasMutationReceipt {
     pub canvas_id: String,
@@ -63,6 +76,102 @@ fn normalize_canvas_draft(mut draft: CanvasDraft) -> crate::error::Result<Canvas
         last_wallpaper: None,
         layout: draft.layout,
     })
+}
+
+fn aspect_size_from_width(width: u32, aspect: CanvasSize) -> crate::error::Result<CanvasSize> {
+    aspect
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+    let height = u64::from(width)
+        .checked_mul(u64::from(aspect.height))
+        .and_then(|value| value.checked_add(u64::from(aspect.width) / 2))
+        .map(|value| value / u64::from(aspect.width))
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| {
+            crate::error::Error::CanvasInvalid(
+                "canvas member aspect ratio calculation overflowed".to_string(),
+            )
+        })?;
+    CanvasSize { width, height }
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))
+}
+
+fn aspect_size_from_height(height: u32, aspect: CanvasSize) -> crate::error::Result<CanvasSize> {
+    aspect
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+    let width = u64::from(height)
+        .checked_mul(u64::from(aspect.width))
+        .and_then(|value| value.checked_add(u64::from(aspect.height) / 2))
+        .map(|value| value / u64::from(aspect.height))
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| {
+            crate::error::Error::CanvasInvalid(
+                "canvas member aspect ratio calculation overflowed".to_string(),
+            )
+        })?;
+    CanvasSize { width, height }
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))
+}
+
+fn reconcile_canvas_member_runtime_size(
+    current: CanvasSize,
+    actual: CanvasSize,
+    aspect_locked: bool,
+) -> crate::error::Result<CanvasSize> {
+    current
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+    actual
+        .validate()
+        .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+    if aspect_locked {
+        aspect_size_from_width(current.width.max(actual.width), actual)
+    } else {
+        Ok(current.component_max(actual))
+    }
+}
+
+fn reconcile_canvas_draft_sizes(
+    members: &mut HashMap<String, CanvasMemberPrefs>,
+    live_sizes: &HashMap<String, CanvasSize>,
+) -> crate::error::Result<()> {
+    for (key, member) in members {
+        let Some(actual) = live_sizes.get(key).copied() else {
+            continue;
+        };
+        let size =
+            reconcile_canvas_member_runtime_size(member.rect.size(), actual, member.aspect_locked)?;
+        member.rect.width = size.width;
+        member.rect.height = size.height;
+    }
+    Ok(())
+}
+
+fn validate_canvas_scale_to(
+    members: &HashMap<String, CanvasMemberPrefs>,
+    live_minimums: &HashMap<String, CanvasSize>,
+    previous: Option<&CanvasPrefs>,
+) -> crate::error::Result<()> {
+    for (key, member) in members {
+        let minimum = live_minimums.get(key).copied().or_else(|| {
+            previous
+                .and_then(|canvas| canvas.members.get(key))
+                .map(|member| member.rect.size())
+        });
+        let Some(minimum) = minimum else {
+            continue;
+        };
+        if !member.rect.size().contains(minimum) {
+            return Err(crate::error::Error::CanvasInvalid(format!(
+                "canvas member '{key}' scale to {}x{} is smaller than its minimum {}x{}",
+                member.rect.width, member.rect.height, minimum.width, minimum.height
+            )));
+        }
+    }
+    Ok(())
 }
 
 pub struct SettingsStore {
@@ -360,19 +469,12 @@ impl SettingsStore {
             .cloned()
     }
 
-    pub fn update_canvas_member_size(
+    pub fn reconcile_canvas_member_runtime_size(
         &self,
         display_key: &str,
-        width: u32,
-        height: u32,
+        actual: CanvasSize,
     ) -> crate::error::Result<Option<String>> {
-        let next_size = CanvasRect {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        };
-        next_size
+        actual
             .validate()
             .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
         let changed_canvas_id = {
@@ -385,15 +487,21 @@ impl SettingsStore {
                 return Ok(None);
             };
             let canvas_id = canvas_id.clone();
-            let current = canvas.members[display_key].rect;
-            if current.width == width && current.height == height {
+            let current_member = canvas.members[display_key];
+            let current = current_member.rect;
+            let next_size = reconcile_canvas_member_runtime_size(
+                current.size(),
+                actual,
+                current_member.aspect_locked,
+            )?;
+            if current.size() == next_size {
                 return Ok(None);
             }
             let next = CanvasRect {
                 x: current.x,
                 y: current.y,
-                width,
-                height,
+                width: next_size.width,
+                height: next_size.height,
             };
             let extent = crate::wallframe::display::placement::union(canvas.members.iter().map(
                 |(key, member)| {
@@ -422,6 +530,153 @@ impl SettingsStore {
         self.dirty.store(true, Ordering::Release);
         self.notify.notify_one();
         Ok(Some(changed_canvas_id))
+    }
+
+    pub fn configure_canvas_member(
+        &self,
+        canvas_id: &str,
+        expected_revision: u64,
+        display_key: &str,
+        config: CanvasMemberConfig,
+        actual: Option<CanvasSize>,
+    ) -> crate::error::Result<CanvasMutationReceipt> {
+        let display_key = display_key.trim();
+        if display_key.is_empty() {
+            return Err(crate::error::Error::CanvasInvalid(
+                "canvas member has an empty display key".to_string(),
+            ));
+        }
+        if let Some(actual) = actual {
+            actual
+                .validate()
+                .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+        }
+        let (canvas, previous, revision, changed) = {
+            let mut settings = self.inner.write().expect("settings poisoned");
+            let current_revision = self.canvas_revision();
+            if expected_revision != current_revision {
+                return Err(crate::error::Error::CanvasRevisionConflict {
+                    expected: expected_revision,
+                    current: current_revision,
+                });
+            }
+            let previous = settings
+                .canvases
+                .get(canvas_id)
+                .cloned()
+                .ok_or_else(|| crate::error::Error::CanvasNotFound(canvas_id.to_string()))?;
+            let current_member = previous.members.get(display_key).copied().ok_or_else(|| {
+                crate::error::Error::CanvasInvalid(format!(
+                    "canvas member '{display_key}' does not exist"
+                ))
+            })?;
+            let aspect_locked = config.aspect_locked.unwrap_or(current_member.aspect_locked);
+            let current_size = current_member.rect.size();
+            let aspect = actual.unwrap_or(current_size);
+            let next_size = match config.size {
+                Some(CanvasMemberSizeChange::Reset) => actual.ok_or_else(|| {
+                    crate::error::Error::CanvasInvalid(format!(
+                        "canvas member '{display_key}' is offline"
+                    ))
+                })?,
+                Some(CanvasMemberSizeChange::Width(width)) => {
+                    CanvasSize {
+                        width,
+                        height: current_size.height,
+                    }
+                    .validate()
+                    .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+                    if aspect_locked {
+                        let width = if let Some(actual) = actual {
+                            width.max(actual.width)
+                        } else {
+                            width.max(current_size.width)
+                        };
+                        aspect_size_from_width(width, aspect)?
+                    } else {
+                        let requested = CanvasSize {
+                            width,
+                            height: current_size.height,
+                        };
+                        actual.map_or(requested, |actual| requested.component_max(actual))
+                    }
+                }
+                Some(CanvasMemberSizeChange::Height(height)) => {
+                    CanvasSize {
+                        width: current_size.width,
+                        height,
+                    }
+                    .validate()
+                    .map_err(|message| crate::error::Error::CanvasInvalid(message.to_string()))?;
+                    if aspect_locked {
+                        let height = if let Some(actual) = actual {
+                            height.max(actual.height)
+                        } else {
+                            height.max(current_size.height)
+                        };
+                        aspect_size_from_height(height, aspect)?
+                    } else {
+                        let requested = CanvasSize {
+                            width: current_size.width,
+                            height,
+                        };
+                        actual.map_or(requested, |actual| requested.component_max(actual))
+                    }
+                }
+                None => actual.map_or(Ok(current_size), |actual| {
+                    reconcile_canvas_member_runtime_size(current_size, actual, aspect_locked)
+                })?,
+            };
+            let next_member = CanvasMemberPrefs {
+                rect: CanvasRect {
+                    x: current_member.rect.x,
+                    y: current_member.rect.y,
+                    width: next_size.width,
+                    height: next_size.height,
+                },
+                aspect_locked,
+            };
+            if next_member == current_member {
+                (previous.clone(), previous, current_revision, false)
+            } else {
+                let extent = crate::wallframe::display::placement::union(
+                    previous.members.iter().map(|(key, member)| {
+                        if key == display_key {
+                            next_member.rect
+                        } else {
+                            member.rect
+                        }
+                    }),
+                );
+                if extent.is_none() {
+                    return Err(crate::error::Error::CanvasInvalid(
+                        "canvas extent is invalid after member configuration".to_string(),
+                    ));
+                }
+                let canvas = settings
+                    .canvases
+                    .get_mut(canvas_id)
+                    .expect("canvas disappeared while configuring member");
+                *canvas
+                    .members
+                    .get_mut(display_key)
+                    .expect("canvas member disappeared while configuring") = next_member;
+                let canvas = canvas.clone();
+                let revision = self.canvas_revision.fetch_add(1, Ordering::AcqRel) + 1;
+                (canvas, previous, revision, true)
+            }
+        };
+        if changed {
+            self.dirty.store(true, Ordering::Release);
+            self.notify.notify_one();
+        }
+        Ok(CanvasMutationReceipt {
+            canvas_id: canvas_id.to_string(),
+            canvas,
+            revision,
+            affected_display_keys: vec![display_key.to_string()],
+            previous: Some(previous),
+        })
     }
 
     pub fn set_canvas_layout(
@@ -470,8 +725,14 @@ impl SettingsStore {
         Ok(())
     }
 
-    pub fn create_canvas(&self, draft: CanvasDraft) -> crate::error::Result<CanvasMutationReceipt> {
-        let canvas = normalize_canvas_draft(draft)?;
+    pub fn create_canvas(
+        &self,
+        draft: CanvasDraft,
+        live_minimums: &HashMap<String, CanvasSize>,
+    ) -> crate::error::Result<CanvasMutationReceipt> {
+        let mut canvas = normalize_canvas_draft(draft)?;
+        reconcile_canvas_draft_sizes(&mut canvas.members, live_minimums)?;
+        validate_canvas_scale_to(&canvas.members, live_minimums, None)?;
         let canvas_id = uuid::Uuid::new_v4().to_string();
         let affected_display_keys = canvas.members.keys().cloned().collect::<Vec<_>>();
         let revision = {
@@ -496,8 +757,10 @@ impl SettingsStore {
         canvas_id: &str,
         expected_revision: u64,
         draft: CanvasDraft,
+        live_minimums: &HashMap<String, CanvasSize>,
     ) -> crate::error::Result<CanvasMutationReceipt> {
         let mut canvas = normalize_canvas_draft(draft)?;
+        reconcile_canvas_draft_sizes(&mut canvas.members, live_minimums)?;
         let (affected_display_keys, previous, revision) = {
             let mut settings = self.inner.write().expect("settings poisoned");
             let current_revision = self.canvas_revision();
@@ -513,6 +776,7 @@ impl SettingsStore {
                 .get(canvas_id)
                 .cloned()
                 .ok_or_else(|| crate::error::Error::CanvasNotFound(canvas_id.to_string()))?;
+            validate_canvas_scale_to(&canvas.members, live_minimums, Some(&old))?;
             canvas.last_wallpaper = old.last_wallpaper.clone();
             canvas.layout = old.layout;
             let mut affected = old.members.keys().cloned().collect::<HashSet<_>>();

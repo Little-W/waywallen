@@ -284,6 +284,7 @@ static auto canvasMembersFromVariant(const QVariantList& values)
         proto::CanvasMemberInput member;
         member.setSettingsKey(map.value(u"settingsKey"_s).toString());
         member.setRect(std::move(rect));
+        member.setAspectLocked(map.value(u"aspectLocked"_s, true).toBool());
         members.append(std::move(member));
     }
     return members;
@@ -345,6 +346,78 @@ void CanvasMutationQuery::reload() {
             } else if (response.hasCanvasDelete()) {
                 Q_EMIT self->canvasDeleted(deleted_id);
             }
+        });
+        co_return;
+    });
+}
+
+CanvasMemberConfigureQuery::CanvasMemberConfigureQuery(QObject* parent): Query(parent) {}
+
+static auto canvasMemberConfigureRequest(const QString& canvasId, quint64 expectedRevision,
+                                         const QString& settingsKey)
+    -> proto::CanvasMemberConfigureRequest {
+    proto::CanvasMemberConfigureRequest inner;
+    inner.setCanvasId(canvasId);
+    inner.setExpectedRevision(expectedRevision);
+    inner.setSettingsKey(settingsKey);
+    return inner;
+}
+
+void CanvasMemberConfigureQuery::configureWidth(const QString& canvasId, quint64 expectedRevision,
+                                                const QString& settingsKey, quint32 width) {
+    auto inner = canvasMemberConfigureRequest(canvasId, expectedRevision, settingsKey);
+    inner.setWidth(width);
+    proto::Request request;
+    request.setCanvasMemberConfigure(std::move(inner));
+    m_request = std::move(request);
+    reload();
+}
+
+void CanvasMemberConfigureQuery::configureHeight(const QString& canvasId, quint64 expectedRevision,
+                                                 const QString& settingsKey, quint32 height) {
+    auto inner = canvasMemberConfigureRequest(canvasId, expectedRevision, settingsKey);
+    inner.setHeight(height);
+    proto::Request request;
+    request.setCanvasMemberConfigure(std::move(inner));
+    m_request = std::move(request);
+    reload();
+}
+
+void CanvasMemberConfigureQuery::configureAspectLocked(const QString& canvasId,
+                                                       quint64        expectedRevision,
+                                                       const QString& settingsKey, bool locked) {
+    auto inner = canvasMemberConfigureRequest(canvasId, expectedRevision, settingsKey);
+    inner.setAspectLockedSet(true);
+    inner.setAspectLocked(locked);
+    proto::Request request;
+    request.setCanvasMemberConfigure(std::move(inner));
+    m_request = std::move(request);
+    reload();
+}
+
+void CanvasMemberConfigureQuery::resetSize(const QString& canvasId, quint64 expectedRevision,
+                                           const QString& settingsKey) {
+    auto inner = canvasMemberConfigureRequest(canvasId, expectedRevision, settingsKey);
+    inner.setResetSize(true);
+    proto::Request request;
+    request.setCanvasMemberConfigure(std::move(inner));
+    m_request = std::move(request);
+    reload();
+}
+
+void CanvasMemberConfigureQuery::reload() {
+    if (! m_request) return;
+    setStatus(Status::Querying);
+    auto backend = App::instance()->backend();
+    auto request = std::move(*m_request);
+    m_request.reset();
+
+    auto self = QWatcher { this };
+    spawn([self, backend, request = std::move(request)]() mutable -> task<void> {
+        auto result = co_await backend->send(std::move(request));
+        if (! co_await QAsyncResult::qexecutor()) co_return;
+        if (! self) co_return;
+        self->inspect_set(result, [](const proto::Response&) {
         });
         co_return;
     });

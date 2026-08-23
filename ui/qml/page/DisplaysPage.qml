@@ -24,7 +24,7 @@ MD.Page {
     property bool paneAnimationsEnabled: false
     readonly property bool detailsVisible: !!root.selectedDisplayObject || !!root.selectedCanvasObject
     readonly property real paneSpacing: 12
-    readonly property real paneAvailableHeight: Math.max(0, height - paneSpacing - (detailsVisible ? paneSpacing / 2 : 0))
+    readonly property real paneAvailableHeight: Math.max(0, pageContent.height - paneSpacing - (detailsVisible ? paneSpacing / 2 : 0))
     readonly property real displayPaneHeight: detailsVisible ? paneAvailableHeight / 2 : paneAvailableHeight
     readonly property real detailPaneHeight: detailsVisible ? paneAvailableHeight - displayPaneHeight : 0
 
@@ -208,13 +208,14 @@ MD.Page {
                 return;
             const selected = root.findSelectedCanvas();
             if (!selected) {
+                canvasDialog.close();
                 canvasEditor.clear();
                 root.selectedKind = "";
                 root.selectedId = null;
             } else if (!canvasEditor.dirty) {
                 canvasEditor.begin(selected);
             } else {
-                canvasEditor.refreshMemberSizes(selected);
+                canvasEditor.refreshMemberConfig(selected);
             }
         }
     }
@@ -243,7 +244,8 @@ MD.Page {
         onSubmitted: function (name) {
             if (!root.selectedCanvasObject)
                 return;
-            canvasMutationQuery.updateCanvas(root.selectedCanvasObject.id, canvasEditor.baseRevision, name, canvasEditor.members);
+            canvasEditor.setName(name);
+            root.applyCanvasDraft();
         }
     }
 
@@ -484,6 +486,8 @@ MD.Page {
     readonly property var selected: selectedDisplayObject || selectedCanvasObject
 
     Item {
+        id: pageContent
+
         anchors.fill: parent
         anchors.leftMargin: 12
         anchors.rightMargin: 12
@@ -1020,6 +1024,7 @@ MD.Page {
                 clip: true
                 leftMargin: 16
                 rightMargin: 16
+                bottomMargin: 16
                 contentWidth: Math.max(0, width - leftMargin - rightMargin)
                 contentHeight: root.detailsVisible ? detailsContent.implicitHeight : 0
                 flickableDirection: MD.Flickable2.VerticalFlick
@@ -1192,350 +1197,48 @@ MD.Page {
                             }
                         }
 
-                        MD.Divider {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 4
-                            Layout.bottomMargin: 4
-                        }
-
-                        MD.Text {
-                            text: connectedRow.active ? qsTr("Connected") : qsTr("Assigned")
-                            typescale: MD.Token.typescale.title_small
-                            color: MD.Token.color.on_surface
-                        }
-
-                        RowLayout {
-                            id: connectedRow
-                            readonly property string connectedId: {
-                                if (!root.selected)
-                                    return "";
-                                const links = root.selected.links || [];
-                                return links.length > 0 ? (links[0].rendererId || "") : "";
-                            }
-                            readonly property bool active: {
-                                if (!root.selected)
-                                    return false;
-                                const links = root.selected.links || [];
-                                return links.length > 0 && !!links[0].active;
-                            }
-                            // Re-resolve when the manager's renderer list changes
-                            // (the `renderers` access wires up the dependency) so a
-                            // late RendererUpsert or a RendererRemoved is reflected
-                            // without manual refresh.
-                            readonly property var renderer: {
-                                const _ = W.App.rendererManager.renderers;
-                                return connectedId.length > 0 ? W.App.rendererManager.get(connectedId) : null;
-                            }
-                            readonly property int activePlaylistId: root.selected ? Number(root.selected.activePlaylistId || 0) : 0
-                            readonly property var playlistStatus: root.selected ? (root.selected.playlistStatus || ({})) : ({})
-                            readonly property bool hasPlaylist: activePlaylistId > 0
-                            readonly property string playlistDetail: {
-                                const status = playlistStatus || ({});
-                                const parts = [];
-                                const count = Number(status.count || 0);
-                                const position = Number(status.position || 0);
-                                const remaining = Number(status.remainingSecs || 0);
-                                if (count > 0)
-                                    parts.push(Math.min(position + 1, count) + " / " + count);
-                                if (remaining > 0)
-                                    parts.push(qsTr("%n min left", "", Math.ceil(remaining / 60)));
-                                return parts.join(" · ");
-                            }
-                            Layout.fillWidth: true
-                            spacing: 16
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                spacing: 8
-
-                                MD.Icon {
-                                    readonly property string status: connectedRow.renderer ? connectedRow.renderer.status : ""
-                                    name: {
-                                        if (!connectedRow.renderer || !connectedRow.active)
-                                            return MD.Token.icon.pause;
-                                        return status === "paused" ? MD.Token.icon.pause : MD.Token.icon.play_arrow;
-                                    }
-                                    size: 24
-                                    color: !connectedRow.renderer || !connectedRow.active || status === "paused" ? MD.Token.color.on_surface_variant : MD.Token.color.primary
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 0
-                                    spacing: 0
-
-                                    MD.Text {
-                                        Layout.fillWidth: true
-                                        text: {
-                                            const r = connectedRow.renderer;
-                                            if (r) {
-                                                const name = (r.name && r.name.length) ? r.name : "renderer";
-                                                return r.pid > 0 ? (name + "-" + r.pid) : name;
-                                            }
-                                            if (connectedRow.connectedId.length > 0) {
-                                                return connectedRow.connectedId;
-                                            }
-                                            return qsTr("Idle");
-                                        }
-                                        typescale: MD.Token.typescale.body_medium
-                                        color: connectedRow.renderer ? MD.Token.color.on_surface : MD.Token.color.on_surface_variant
-                                        font.family: connectedRow.renderer ? "monospace" : ""
-                                        elide: Text.ElideMiddle
-                                    }
-
-                                    MD.Text {
-                                        Layout.fillWidth: true
-                                        visible: !!connectedRow.renderer
-                                        text: {
-                                            const r = connectedRow.renderer;
-                                            if (!r)
-                                                return "";
-                                            const parts = [(r.status || ""), (r.fps || 0) + " fps"];
-                                            const textureWidth = Number(r.textureWidth || 0);
-                                            const textureHeight = Number(r.textureHeight || 0);
-                                            if (textureWidth > 0 && textureHeight > 0)
-                                                parts.push(textureWidth + " × " + textureHeight);
-                                            return parts.join(" · ");
-                                        }
-                                        typescale: MD.Token.typescale.label_small
-                                        color: MD.Token.color.on_surface_variant
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                visible: connectedRow.hasPlaylist
-                                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                                Layout.maximumWidth: Math.max(220, connectedRow.width * 0.4)
-                                spacing: 8
-
-                                MD.Icon {
-                                    name: MD.Token.icon.playlist_play
-                                    size: 24
-                                    color: MD.Token.color.primary
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 0
-                                    spacing: 0
-
-                                    MD.Text {
-                                        Layout.fillWidth: true
-                                        text: qsTr("Playlist #%1").arg(connectedRow.activePlaylistId)
-                                        typescale: MD.Token.typescale.body_medium
-                                        color: MD.Token.color.on_surface
-                                        elide: Text.ElideRight
-                                    }
-
-                                    MD.Text {
-                                        Layout.fillWidth: true
-                                        visible: connectedRow.playlistDetail.length > 0
-                                        text: connectedRow.playlistDetail
-                                        typescale: MD.Token.typescale.label_small
-                                        color: MD.Token.color.on_surface_variant
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                            }
-                        }
-
-                        // ---- Layout (fillmode + location) ----
-                        MD.Divider {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 8
-                            Layout.bottomMargin: 4
-                            visible: !!root.selected && (root.selectedKind === "canvas" || !(root.selected.canvasId || "").length)
-                        }
-
-                        RowLayout {
+                        W.DisplayLayoutControls {
                             Layout.fillWidth: true
                             visible: !!root.selected && (root.selectedKind === "canvas" || !(root.selected.canvasId || "").length)
-                            spacing: 8
-
-                            MD.Text {
-                                Layout.fillWidth: true
-                                text: qsTr("Layout")
-                                typescale: MD.Token.typescale.title_small
-                                color: MD.Token.color.on_surface
-                            }
-
-                            MD.AssistChip {
-                                visible: !!root.selected && root.selectedKind === "display" && root.selected.layoutOverriddenByWallpaper
-                                text: qsTr("Wallpaper override")
-                            }
-
-                            Item {
-                                implicitWidth: children[0].implicitWidth
-                                MD.IconButton {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    mdState.size: MD.Enum.XS
-                                    enabled: {
-                                        if (!root.selected)
-                                            return false;
-                                        if (root.selectedKind === "canvas") {
-                                            const ovr = root.selectedCanvasObject?.layoutOverride || ({});
-                                            return !canvasLayoutSetQuery.querying && (ovr.fillmodeSet === true || ovr.locationSet === true || ovr.rotationSet === true);
-                                        }
-                                        const ovr = root.selected.layoutOverride || ({});
-                                        return ovr.fillmodeSet === true || ovr.locationSet === true || ovr.alignSet === true || ovr.rotationSet === true;
-                                    }
-                                    icon.name: MD.Token.icon.settings_backup_restore
-                                    MD.ToolTip.visible: hovered
-                                    MD.ToolTip.text: qsTr("Revert to global default")
-                                    onClicked: resetDisplaySettingsDialog.open()
-                                }
-                            }
-                        }
-
-                        Flow {
-                            id: layoutFlow
-                            readonly property var displayLayout: {
+                            displayLayout: {
                                 if (!root.selected)
                                     return ({});
                                 if (root.selectedKind === "canvas")
                                     return root.selectedCanvasObject?.effectiveLayout || ({});
                                 return root.selected.displayLayout || root.selected.effectiveLayout || ({});
                             }
-                            readonly property int currentX: root.clampPercent(displayLayout.locationX ?? 50)
-                            readonly property int currentY: root.clampPercent(displayLayout.locationY ?? 50)
-                            readonly property bool locationEnabled: !!root.selected && (displayLayout.fillmode || 0) !== 1
-                            Layout.fillWidth: true
-                            visible: !!root.selected && (root.selectedKind === "canvas" || !(root.selected.canvasId || "").length)
-                            spacing: 12
-
-                            ColumnLayout {
-                                width: Math.min(layoutFlow.width, 220)
-                                spacing: 4
-
-                                MD.Text {
-                                    text: qsTr("Fill mode")
-                                    typescale: MD.Token.typescale.label_medium
-                                    color: MD.Token.color.on_surface_variant
+                            wallpaperOverride: !!root.selected && root.selectedKind === "display" && root.selected.layoutOverriddenByWallpaper
+                            resetEnabled: {
+                                if (!root.selected)
+                                    return false;
+                                if (root.selectedKind === "canvas") {
+                                    const override = root.selectedCanvasObject?.layoutOverride || ({});
+                                    return !canvasLayoutSetQuery.querying && (override.fillmodeSet === true || override.locationSet === true || override.rotationSet === true);
                                 }
-
-                                MD.ComboBox {
-                                    id: fillmodeBox
-                                    Layout.fillWidth: true
-                                    mdState.size: MD.Enum.S
-                                    model: root.kFillModeLabels
-                                    currentIndex: {
-                                        if (!root.selected)
-                                            return 0;
-                                        return root.fillmodeIndex(layoutFlow.displayLayout.fillmode || 0);
-                                    }
-                                    onActivated: idx => root.applyFillmode(root.kFillModeValues[idx])
-                                }
+                                const override = root.selected.layoutOverride || ({});
+                                return override.fillmodeSet === true || override.locationSet === true || override.alignSet === true || override.rotationSet === true;
                             }
-
-                            ColumnLayout {
-                                width: Math.min(layoutFlow.width, 260)
-                                spacing: 4
-
-                                enabled: layoutFlow.locationEnabled
-                                opacity: enabled ? 1.0 : 0.4
-
-                                MD.Text {
-                                    text: qsTr("Horizontal")
-                                    typescale: MD.Token.typescale.label_medium
-                                    color: MD.Token.color.on_surface_variant
-                                }
-
-                                W.ValueSlider {
-                                    id: horizontalLocation
-                                    Layout.fillWidth: true
-                                    from: 0
-                                    to: 100
-                                    stepSize: 1
-                                    value: layoutFlow.currentX
-                                    valueText: root.clampPercent(value)
-                                    valueMaxText: root.clampPercent(to).toString()
-                                    valueHorizontalAlignment: Text.AlignLeft
-                                    onMoved: root.applyLocation(value, verticalLocation.value)
-                                }
-                            }
-
-                            ColumnLayout {
-                                width: Math.min(layoutFlow.width, 260)
-                                spacing: 4
-
-                                enabled: layoutFlow.locationEnabled
-                                opacity: enabled ? 1.0 : 0.4
-
-                                MD.Text {
-                                    text: qsTr("Vertical")
-                                    typescale: MD.Token.typescale.label_medium
-                                    color: MD.Token.color.on_surface_variant
-                                }
-
-                                W.ValueSlider {
-                                    id: verticalLocation
-                                    Layout.fillWidth: true
-                                    from: 0
-                                    to: 100
-                                    stepSize: 1
-                                    value: layoutFlow.currentY
-                                    valueText: root.clampPercent(value)
-                                    valueMaxText: root.clampPercent(to).toString()
-                                    valueHorizontalAlignment: Text.AlignLeft
-                                    onMoved: root.applyLocation(horizontalLocation.value, value)
-                                }
-                            }
-
-                            ColumnLayout {
-                                width: Math.min(layoutFlow.width, implicitWidth)
-                                spacing: 4
-
-                                MD.Text {
-                                    text: qsTr("Rotation")
-                                    typescale: MD.Token.typescale.label_medium
-                                    color: MD.Token.color.on_surface_variant
-                                }
-
-                                MD.SegmentedButtonGroup {
-                                    id: rotationGroup
-                                    size: MD.Enum.XS
-
-                                    // Inline buttons; SegmentedButtonGroup's
-                                    // updatePositions only recognises segmented
-                                    // buttons that are direct children — a
-                                    // Repeater here ends up in contentModel as
-                                    // an extra slot and shifts PosFirst off the
-                                    // real first button.
-                                    function applyRotation(rotationValue) {
-                                        root.applyRotation(rotationValue);
-                                    }
-                                    function isChecked(rotationValue) {
-                                        if (!root.selected)
-                                            return rotationValue === 1; // ROTATION_NORMAL
-                                        return (layoutFlow.displayLayout.rotation || 0) === rotationValue;
-                                    }
-
-                                    MD.SegmentedButton {
-                                        text: root.kRotationLabels[0]
-                                        checked: rotationGroup.isChecked(root.kRotationValues[0])
-                                        onClicked: rotationGroup.applyRotation(root.kRotationValues[0])
-                                    }
-                                    MD.SegmentedButton {
-                                        text: root.kRotationLabels[1]
-                                        checked: rotationGroup.isChecked(root.kRotationValues[1])
-                                        onClicked: rotationGroup.applyRotation(root.kRotationValues[1])
-                                    }
-                                    MD.SegmentedButton {
-                                        text: root.kRotationLabels[2]
-                                        checked: rotationGroup.isChecked(root.kRotationValues[2])
-                                        onClicked: rotationGroup.applyRotation(root.kRotationValues[2])
-                                    }
-                                    MD.SegmentedButton {
-                                        text: root.kRotationLabels[3]
-                                        checked: rotationGroup.isChecked(root.kRotationValues[3])
-                                        onClicked: rotationGroup.applyRotation(root.kRotationValues[3])
-                                    }
-                                }
-                            }
+                            fillModeValues: root.kFillModeValues
+                            fillModeLabels: root.kFillModeLabels
+                            rotationValues: root.kRotationValues
+                            rotationLabels: root.kRotationLabels
+                            onFillModeRequested: value => root.applyFillmode(value)
+                            onLocationRequested: (x, y) => root.applyLocation(x, y)
+                            onRotationRequested: value => root.applyRotation(value)
+                            onResetRequested: resetDisplaySettingsDialog.open()
                         }
+
+                        W.RendererConnectionPanel {
+                            Layout.fillWidth: true
+                            target: root.selected
+                        }
+
+                        W.CanvasDisplayList {
+                            Layout.fillWidth: true
+                            visible: root.selectedKind === "canvas" && canvasEditor.members.length > 0
+                            editor: canvasEditor
+                        }
+
                     }
                 }
             }

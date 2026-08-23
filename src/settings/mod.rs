@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::Notify;
 
 use crate::wallframe::display::layout::{Align, FillMode, Location, Rotation};
-use crate::wallframe::display::placement::CanvasRect;
+use crate::wallframe::display::placement::{CanvasRect, CanvasSize};
 
 mod paths;
 mod schema;

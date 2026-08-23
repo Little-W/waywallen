@@ -252,4 +252,27 @@ private:
     std::optional<control::v1::Request> m_request;
 };
 
+export class CanvasMemberConfigureQuery
+    : public Query,
+      public QueryExtra<control::v1::Response, CanvasMemberConfigureQuery> {
+    Q_OBJECT
+    QML_ELEMENT
+
+public:
+    CanvasMemberConfigureQuery(QObject* parent = nullptr);
+
+    Q_INVOKABLE void configureWidth(const QString& canvasId, quint64 expectedRevision,
+                                    const QString& settingsKey, quint32 width);
+    Q_INVOKABLE void configureHeight(const QString& canvasId, quint64 expectedRevision,
+                                     const QString& settingsKey, quint32 height);
+    Q_INVOKABLE void configureAspectLocked(const QString& canvasId, quint64 expectedRevision,
+                                           const QString& settingsKey, bool locked);
+    Q_INVOKABLE void resetSize(const QString& canvasId, quint64 expectedRevision,
+                               const QString& settingsKey);
+    void             reload() override;
+
+private:
+    std::optional<control::v1::Request> m_request;
+};
+
 } // namespace waywallen

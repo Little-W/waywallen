@@ -24,6 +24,7 @@ fn canvas_members_from_pb(
                     width: rect.width,
                     height: rect.height,
                 },
+                aspect_locked: member.aspect_locked,
             },
         );
         if previous.is_some() {
@@ -959,11 +960,14 @@ pub(super) async fn dispatch_inner(
 
         Req::CanvasCreate(r) => {
             let layout = canvas_layout_from_pb(r.layout_override.as_ref());
-            let receipt = state.settings.create_canvas(crate::settings::CanvasDraft {
-                name: r.name,
-                members: canvas_members_from_pb(r.members)?,
-                layout: (!layout.is_empty()).then_some(layout),
-            })?;
+            let receipt = state
+                .router
+                .create_canvas_config(crate::settings::CanvasDraft {
+                    name: r.name,
+                    members: canvas_members_from_pb(r.members)?,
+                    layout: (!layout.is_empty()).then_some(layout),
+                })
+                .await?;
             if let Err(error) = application::reconcile_presentation_configs(
                 state,
                 &receipt.affected_display_keys,
@@ -995,15 +999,18 @@ pub(super) async fn dispatch_inner(
         }
 
         Req::CanvasUpdate(r) => {
-            let receipt = state.settings.update_canvas(
-                &r.canvas_id,
-                r.expected_revision,
-                crate::settings::CanvasDraft {
-                    name: r.name,
-                    members: canvas_members_from_pb(r.members)?,
-                    layout: None,
-                },
-            )?;
+            let receipt = state
+                .router
+                .update_canvas_config(
+                    &r.canvas_id,
+                    r.expected_revision,
+                    crate::settings::CanvasDraft {
+                        name: r.name,
+                        members: canvas_members_from_pb(r.members)?,
+                        layout: None,
+                    },
+                )
+                .await?;
             let membership_changed = receipt.previous.as_ref().is_some_and(|previous| {
                 previous
                     .members
@@ -1042,6 +1049,49 @@ pub(super) async fn dispatch_inner(
                 .find(|canvas| canvas.id == receipt.canvas_id)
                 .map(canvas_snapshot_to_pb);
             Res::CanvasUpdate(pb::CanvasUpdateResponse {
+                canvas,
+                revision: receipt.revision,
+            })
+        }
+
+        Req::CanvasMemberConfigure(r) => {
+            let size = match r.size_change {
+                Some(pb::canvas_member_configure_request::SizeChange::Width(width)) => {
+                    Some(crate::settings::CanvasMemberSizeChange::Width(width))
+                }
+                Some(pb::canvas_member_configure_request::SizeChange::Height(height)) => {
+                    Some(crate::settings::CanvasMemberSizeChange::Height(height))
+                }
+                Some(pb::canvas_member_configure_request::SizeChange::ResetSize(_)) => {
+                    Some(crate::settings::CanvasMemberSizeChange::Reset)
+                }
+                None => None,
+            };
+            let receipt = state
+                .router
+                .configure_canvas_member_config(
+                    &r.canvas_id,
+                    r.expected_revision,
+                    &r.settings_key,
+                    crate::settings::CanvasMemberConfig {
+                        size,
+                        aspect_locked: r.aspect_locked_set.then_some(r.aspect_locked),
+                    },
+                )
+                .await?;
+            state
+                .router
+                .canvas_configs_changed([receipt.canvas_id.clone()])
+                .await;
+            let canvas = state
+                .router
+                .snapshot_canvases()
+                .await
+                .canvases
+                .into_iter()
+                .find(|canvas| canvas.id == receipt.canvas_id)
+                .map(canvas_snapshot_to_pb);
+            Res::CanvasMemberConfigure(pb::CanvasMemberConfigureResponse {
                 canvas,
                 revision: receipt.revision,
             })

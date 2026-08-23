@@ -92,6 +92,45 @@
     </message>
 </context>
 <context>
+    <name>CanvasDisplayList</name>
+    <message>
+        <source>Canvas display update failed</source>
+        <translation>画布显示器更新失败</translation>
+    </message>
+    <message>
+        <source>Displays</source>
+        <translation>显示器</translation>
+    </message>
+    <message>
+        <source>Original %1 × %2</source>
+        <translation>原始尺寸 %1 × %2</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>离线</translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation>宽度</translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation>高度</translation>
+    </message>
+    <message>
+        <source>Unlock aspect ratio</source>
+        <translation>解除宽高比锁定</translation>
+    </message>
+    <message>
+        <source>Lock aspect ratio</source>
+        <translation>锁定宽高比</translation>
+    </message>
+    <message>
+        <source>Reset to original size</source>
+        <translation>重置为原始尺寸</translation>
+    </message>
+</context>
+<context>
     <name>ContentRatingFilter</name>
     <message>
         <source>is</source>
@@ -252,6 +291,37 @@
     </message>
 </context>
 <context>
+    <name>DisplayLayoutControls</name>
+    <message>
+        <source>Layout</source>
+        <translation>布局</translation>
+    </message>
+    <message>
+        <source>Wallpaper override</source>
+        <translation>壁纸覆盖</translation>
+    </message>
+    <message>
+        <source>Revert to global default</source>
+        <translation>恢复全局默认值</translation>
+    </message>
+    <message>
+        <source>Fill mode</source>
+        <translation>填充模式</translation>
+    </message>
+    <message>
+        <source>Horizontal</source>
+        <translation>水平</translation>
+    </message>
+    <message>
+        <source>Vertical</source>
+        <translation>垂直</translation>
+    </message>
+    <message>
+        <source>Rotation</source>
+        <translation>旋转</translation>
+    </message>
+</context>
+<context>
     <name>DisplaysPage</name>
     <message>
         <source>Displays</source>
@@ -378,62 +448,12 @@
         <translation>画布</translation>
     </message>
     <message>
-        <source>Connected</source>
-        <translation>已连接</translation>
-    </message>
-    <message>
-        <source>Assigned</source>
-        <translation>已分配</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n min left</source>
-        <translation>
-            <numerusform>剩余 %n 分钟</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Idle</source>
-        <translation>空闲</translation>
-    </message>
-    <message>
-        <source>Playlist #%1</source>
-        <translation>播放列表 #%1</translation>
-    </message>
-    <message>
-        <source>Layout</source>
-        <translation>布局</translation>
-    </message>
-    <message>
-        <source>Wallpaper override</source>
-        <translation>壁纸覆盖</translation>
-    </message>
-    <message>
-        <source>Revert to global default</source>
-        <translation>恢复全局默认值</translation>
-    </message>
-    <message>
         <source>Revert layout settings?</source>
         <translation>恢复布局设置？</translation>
     </message>
     <message>
         <source>The settings for this layout will be reverted to the global default. Your custom configuration will be lost.</source>
         <translation>当前布局将恢复为全局默认设置，自定义配置将会丢失。</translation>
-    </message>
-    <message>
-        <source>Fill mode</source>
-        <translation>填充模式</translation>
-    </message>
-    <message>
-        <source>Horizontal</source>
-        <translation>水平</translation>
-    </message>
-    <message>
-        <source>Vertical</source>
-        <translation>垂直</translation>
-    </message>
-    <message>
-        <source>Rotation</source>
-        <translation>旋转</translation>
     </message>
 </context>
 <context>
@@ -1100,6 +1120,31 @@
     <message>
         <source>This remote has no login or settings to manage.</source>
         <translation>此远程源没有可管理的登录或设置。</translation>
+    </message>
+</context>
+<context>
+    <name>RendererConnectionPanel</name>
+    <message numerus="yes">
+        <source>%n min left</source>
+        <translation>
+            <numerusform>剩余 %n 分钟</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>已连接</translation>
+    </message>
+    <message>
+        <source>Assigned</source>
+        <translation>已分配</translation>
+    </message>
+    <message>
+        <source>Idle</source>
+        <translation>空闲</translation>
+    </message>
+    <message>
+        <source>Playlist #%1</source>
+        <translation>播放列表 #%1</translation>
     </message>
 </context>
 <context>

@@ -213,6 +213,9 @@ set(QML_FILES
   qml/page/SettingsPage.qml
   qml/page/DisplaysPage.qml
   qml/page/display/CanvasEditorState.qml
+  qml/page/display/CanvasDisplayList.qml
+  qml/page/display/DisplayLayoutControls.qml
+  qml/page/display/RendererConnectionPanel.qml
   qml/page/SourceManagePage.qml
   qml/page/AddLibraryPage.qml
   qml/page/AboutPage.qml

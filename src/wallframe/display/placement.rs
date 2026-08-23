@@ -6,6 +6,35 @@ use crate::wallframe::routing::table::{LinkDstRect, LinkSrcRect};
 
 pub const MAX_CANVAS_EXTENT: u32 = 1_000_000;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CanvasSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl CanvasSize {
+    pub fn validate(self) -> Result<Self, &'static str> {
+        if self.width == 0 || self.height == 0 {
+            return Err("canvas member must have a non-zero size");
+        }
+        if self.width > MAX_CANVAS_EXTENT || self.height > MAX_CANVAS_EXTENT {
+            return Err("canvas member exceeds the supported extent");
+        }
+        Ok(self)
+    }
+
+    pub fn contains(self, other: Self) -> bool {
+        self.width >= other.width && self.height >= other.height
+    }
+
+    pub fn component_max(self, other: Self) -> Self {
+        Self {
+            width: self.width.max(other.width),
+            height: self.height.max(other.height),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CanvasRect {
     pub x: i32,
@@ -16,16 +45,18 @@ pub struct CanvasRect {
 
 impl CanvasRect {
     pub fn validate(self) -> Result<Self, &'static str> {
-        if self.width == 0 || self.height == 0 {
-            return Err("canvas member must have a non-zero size");
-        }
-        if self.width > MAX_CANVAS_EXTENT || self.height > MAX_CANVAS_EXTENT {
-            return Err("canvas member exceeds the supported extent");
-        }
+        self.size().validate()?;
         if self.right().is_none() || self.bottom().is_none() {
             return Err("canvas member coordinates overflow");
         }
         Ok(self)
+    }
+
+    pub fn size(self) -> CanvasSize {
+        CanvasSize {
+            width: self.width,
+            height: self.height,
+        }
     }
 
     pub fn right(self) -> Option<i64> {
@@ -302,16 +333,16 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_span_slices_one_texture() {
+    fn horizontal_span_maps_scale_to_size_onto_each_surface() {
         let canvas = CanvasRect {
             x: 0,
             y: 0,
-            width: 3840,
-            height: 1080,
+            width: 5760,
+            height: 2160,
         };
         let left = project_canvas(
-            3840,
-            1080,
+            5760,
+            2160,
             1920,
             1080,
             canvas,
@@ -326,16 +357,16 @@ mod tests {
         )
         .unwrap();
         let right = project_canvas(
-            3840,
-            1080,
+            5760,
+            2160,
             2560,
             1440,
             canvas,
             CanvasRect {
                 x: 1920,
                 y: 0,
-                width: 1920,
-                height: 1080,
+                width: 3840,
+                height: 2160,
             },
             layout(FillMode::Stretched),
             [0.0, 0.0, 0.0, 1.0],
@@ -355,8 +386,8 @@ mod tests {
             LinkSrcRect {
                 x: 1920.0,
                 y: 0.0,
-                w: 1920.0,
-                h: 1080.0
+                w: 3840.0,
+                h: 2160.0
             }
         );
         assert_eq!(

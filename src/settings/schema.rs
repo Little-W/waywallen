@@ -4,6 +4,10 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Daemon-wide layout defaults applied to displays that have no
 /// `[displays.<name>]` override.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -61,6 +65,8 @@ pub struct CanvasPrefs {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CanvasMemberPrefs {
     pub rect: CanvasRect,
+    #[serde(default = "default_true")]
+    pub aspect_locked: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]

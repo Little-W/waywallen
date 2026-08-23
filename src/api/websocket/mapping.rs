@@ -388,6 +388,11 @@ pub(super) fn canvas_snapshot_to_pb(
                 settings_key: member.settings_key,
                 rect: Some(canvas_rect_to_pb(member.rect)),
                 display_ids: member.display_ids,
+                minimum_scale_to: member.minimum_scale_to.map(|size| pb::CanvasSize {
+                    width: size.width,
+                    height: size.height,
+                }),
+                aspect_locked: member.aspect_locked,
             })
             .collect(),
         extent: snapshot.extent.map(canvas_rect_to_pb),

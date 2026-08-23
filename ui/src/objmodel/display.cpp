@@ -218,6 +218,13 @@ auto Canvas::membersFromPb(const proto::CanvasInfo& info) -> QVariantList {
         QVariantMap row;
         row[u"settingsKey"_s] = member.settingsKey();
         row[u"rect"_s]        = member.hasRect() ? rectFromPb(member.rect()) : QVariantMap {};
+        QVariantMap minimum_scale_to;
+        if (member.hasMinimumScaleTo()) {
+            minimum_scale_to[u"width"_s]  = member.minimumScaleTo().width();
+            minimum_scale_to[u"height"_s] = member.minimumScaleTo().height();
+        }
+        row[u"minimumScaleTo"_s] = minimum_scale_to;
+        row[u"aspectLocked"_s]   = member.aspectLocked();
         QVariantList display_ids;
         display_ids.reserve(member.displayIds().size());
         for (const auto display_id : member.displayIds()) {

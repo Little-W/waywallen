@@ -26,7 +26,7 @@ use crate::settings::{
     ResolvedLayout, SettingsStore,
 };
 use crate::wallframe::display::layout::{FillMode, LayoutInput};
-use crate::wallframe::display::placement::CanvasRect;
+use crate::wallframe::display::placement::{CanvasRect, CanvasSize};
 use crate::wallframe::ipc::proto::{
     ControlMsg, ControlTransition, EventMsg, RENDERER_STATE_FIELD_CLEAR_COLOR,
     RENDERER_STATE_FIELD_RUNTIME_TAGS,
@@ -363,6 +363,8 @@ pub struct CanvasMemberSnapshot {
     pub settings_key: String,
     pub rect: CanvasRect,
     pub display_ids: Vec<DisplayId>,
+    pub minimum_scale_to: Option<CanvasSize>,
+    pub aspect_locked: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1607,6 +1609,29 @@ impl Router {
                 }
             }
         }
+        let settings_key = reg.instance_id.as_deref().unwrap_or(&reg.name).to_string();
+        let registration_size = CanvasSize {
+            width: reg.metrics.width,
+            height: reg.metrics.height,
+        };
+        let actual_size = {
+            let inner = self.inner.lock().await;
+            Self::canvas_member_minimum_scale_to_locked(&inner, &settings_key)
+                .map_or(registration_size, |current| {
+                    current.component_max(registration_size)
+                })
+        };
+        let reconciled_canvas_id = self.settings.get().and_then(|settings| {
+            match settings.reconcile_canvas_member_runtime_size(&settings_key, actual_size) {
+                Ok(canvas_id) => canvas_id,
+                Err(error) => {
+                    log::warn!(
+                        "display registration could not reconcile Canvas member '{settings_key}': {error}"
+                    );
+                    None
+                }
+            }
+        });
         let (tx, rx) = mpsc::unbounded_channel();
         let initial_window_state_flags = reg.window_state_flags;
         let (display_id, display_session_id, auto_linked, canvas_id) = {
@@ -1729,6 +1754,9 @@ impl Router {
             };
             (id, session_id, auto, canvas_id)
         };
+        if let Some(canvas_id) = reconciled_canvas_id {
+            self.canvas_configs_changed([canvas_id]).await;
+        }
         // A freshly auto-linked renderer just gained an audience —
         // cancel any pending orphan timer so it survives.
         if let Some(rid) = auto_linked.as_deref() {
@@ -1973,7 +2001,7 @@ impl Router {
             );
             return;
         }
-        let (changed, size_changed, settings_key) = {
+        let (changed, size_changed, settings_key, actual_size) = {
             let mut inner = self.inner.lock().await;
             if let Some(s) = inner.displays.get_mut(&display_id) {
                 let differs = s.info.metrics != metrics;
@@ -1981,7 +2009,11 @@ impl Router {
                     || s.info.metrics.height != metrics.height;
                 let settings_key = Self::settings_key_for(&s.info).to_string();
                 s.info.metrics = metrics;
-                (differs, size_differs, settings_key)
+                let actual_size = size_differs.then(|| {
+                    Self::canvas_member_minimum_scale_to_locked(&inner, &settings_key)
+                        .expect("resized display must contribute a runtime size")
+                });
+                (differs, size_differs, settings_key, actual_size)
             } else {
                 return;
             }
@@ -1991,10 +2023,9 @@ impl Router {
         if changed {
             if size_changed {
                 if let Some(settings) = self.settings.get() {
-                    match settings.update_canvas_member_size(
+                    match settings.reconcile_canvas_member_runtime_size(
                         &settings_key,
-                        metrics.width,
-                        metrics.height,
+                        actual_size.expect("size change must have an aggregate runtime size"),
                     ) {
                         Ok(Some(canvas_id)) => {
                             self.canvas_configs_changed([canvas_id]).await;
@@ -2887,10 +2918,14 @@ impl Router {
                             })
                             .collect::<Vec<_>>();
                         display_ids.sort_unstable();
+                        let minimum_scale_to =
+                            Self::canvas_member_minimum_scale_to_locked(&inner, settings_key);
                         CanvasMemberSnapshot {
                             settings_key: settings_key.clone(),
                             rect: member.rect,
                             display_ids,
+                            minimum_scale_to,
+                            aspect_locked: member.aspect_locked,
                         }
                     })
                     .collect::<Vec<_>>();
@@ -2914,6 +2949,90 @@ impl Router {
             canvases: snapshots,
             revision,
         }
+    }
+
+    fn canvas_member_minimum_scale_to_locked(
+        inner: &Inner,
+        settings_key: &str,
+    ) -> Option<CanvasSize> {
+        inner
+            .displays
+            .values()
+            .filter(|display| Self::settings_key_for(&display.info) == settings_key)
+            .map(|display| CanvasSize {
+                width: display.info.metrics.width,
+                height: display.info.metrics.height,
+            })
+            .reduce(CanvasSize::component_max)
+    }
+
+    fn canvas_member_minimums_locked(inner: &Inner) -> HashMap<String, CanvasSize> {
+        let mut minimums = HashMap::new();
+        for display in inner.displays.values() {
+            let key = Self::settings_key_for(&display.info).to_string();
+            let size = CanvasSize {
+                width: display.info.metrics.width,
+                height: display.info.metrics.height,
+            };
+            minimums
+                .entry(key)
+                .and_modify(|minimum: &mut CanvasSize| {
+                    *minimum = minimum.component_max(size);
+                })
+                .or_insert(size);
+        }
+        minimums
+    }
+
+    pub async fn create_canvas_config(
+        self: &Arc<Self>,
+        draft: crate::settings::CanvasDraft,
+    ) -> crate::error::Result<crate::settings::CanvasMutationReceipt> {
+        // Keep live metrics locked through validation so a resize cannot interleave with the write.
+        let inner = self.inner.lock().await;
+        let minimums = Self::canvas_member_minimums_locked(&inner);
+        let result = self
+            .settings
+            .get()
+            .expect("settings must be initialized before Canvas mutation")
+            .create_canvas(draft, &minimums);
+        drop(inner);
+        result
+    }
+
+    pub async fn update_canvas_config(
+        self: &Arc<Self>,
+        canvas_id: &str,
+        expected_revision: u64,
+        draft: crate::settings::CanvasDraft,
+    ) -> crate::error::Result<crate::settings::CanvasMutationReceipt> {
+        let inner = self.inner.lock().await;
+        let minimums = Self::canvas_member_minimums_locked(&inner);
+        let result = self
+            .settings
+            .get()
+            .expect("settings must be initialized before Canvas mutation")
+            .update_canvas(canvas_id, expected_revision, draft, &minimums);
+        drop(inner);
+        result
+    }
+
+    pub async fn configure_canvas_member_config(
+        self: &Arc<Self>,
+        canvas_id: &str,
+        expected_revision: u64,
+        settings_key: &str,
+        config: crate::settings::CanvasMemberConfig,
+    ) -> crate::error::Result<crate::settings::CanvasMutationReceipt> {
+        let inner = self.inner.lock().await;
+        let actual = Self::canvas_member_minimum_scale_to_locked(&inner, settings_key);
+        let result = self
+            .settings
+            .get()
+            .expect("settings must be initialized before Canvas mutation")
+            .configure_canvas_member(canvas_id, expected_revision, settings_key, config, actual);
+        drop(inner);
+        result
     }
 
     /// For each requested `DisplayId`, return its settings key —
@@ -4165,34 +4284,39 @@ mod tests {
     async fn canvas_membership_and_extent_are_projected_from_persistent_config() {
         let settings = test_settings_store().await;
         let receipt = settings
-            .create_canvas(crate::settings::CanvasDraft {
-                name: "Office".into(),
-                members: HashMap::from([
-                    (
-                        "display-left".into(),
-                        crate::settings::CanvasMemberPrefs {
-                            rect: CanvasRect {
-                                x: -100,
-                                y: 20,
-                                width: 100,
-                                height: 100,
+            .create_canvas(
+                crate::settings::CanvasDraft {
+                    name: "Office".into(),
+                    members: HashMap::from([
+                        (
+                            "display-left".into(),
+                            crate::settings::CanvasMemberPrefs {
+                                rect: CanvasRect {
+                                    x: -100,
+                                    y: 20,
+                                    width: 100,
+                                    height: 100,
+                                },
+                                aspect_locked: true,
                             },
-                        },
-                    ),
-                    (
-                        "display-right".into(),
-                        crate::settings::CanvasMemberPrefs {
-                            rect: CanvasRect {
-                                x: 0,
-                                y: 20,
-                                width: 200,
-                                height: 100,
+                        ),
+                        (
+                            "display-right".into(),
+                            crate::settings::CanvasMemberPrefs {
+                                rect: CanvasRect {
+                                    x: 0,
+                                    y: 20,
+                                    width: 200,
+                                    height: 100,
+                                },
+                                aspect_locked: true,
                             },
-                        },
-                    ),
-                ]),
-                layout: None,
-            })
+                        ),
+                    ]),
+                    layout: None,
+                },
+                &HashMap::new(),
+            )
             .unwrap();
         let router = Router::new(Arc::new(RendererManager::new_default()));
         router.attach_settings(settings.clone());
@@ -4232,34 +4356,39 @@ mod tests {
     async fn canvas_member_resize_and_layout_refresh_every_projection() {
         let settings = test_settings_store().await;
         let receipt = settings
-            .create_canvas(crate::settings::CanvasDraft {
-                name: "Office".into(),
-                members: HashMap::from([
-                    (
-                        "display-left".into(),
-                        crate::settings::CanvasMemberPrefs {
-                            rect: CanvasRect {
-                                x: 0,
-                                y: 0,
-                                width: 1920,
-                                height: 1080,
+            .create_canvas(
+                crate::settings::CanvasDraft {
+                    name: "Office".into(),
+                    members: HashMap::from([
+                        (
+                            "display-left".into(),
+                            crate::settings::CanvasMemberPrefs {
+                                rect: CanvasRect {
+                                    x: 0,
+                                    y: 0,
+                                    width: 1920,
+                                    height: 1080,
+                                },
+                                aspect_locked: true,
                             },
-                        },
-                    ),
-                    (
-                        "display-right".into(),
-                        crate::settings::CanvasMemberPrefs {
-                            rect: CanvasRect {
-                                x: 1920,
-                                y: 0,
-                                width: 1920,
-                                height: 1080,
+                        ),
+                        (
+                            "display-right".into(),
+                            crate::settings::CanvasMemberPrefs {
+                                rect: CanvasRect {
+                                    x: 1920,
+                                    y: 0,
+                                    width: 1920,
+                                    height: 1080,
+                                },
+                                aspect_locked: true,
                             },
-                        },
-                    ),
-                ]),
-                layout: None,
-            })
+                        ),
+                    ]),
+                    layout: None,
+                },
+                &HashMap::new(),
+            )
             .unwrap();
         let manager = Arc::new(RendererManager::new_default());
         let router = Router::new(manager.clone());
@@ -4325,7 +4454,7 @@ mod tests {
                 right.id,
                 DisplayMetrics {
                     width: 2560,
-                    height: 1440,
+                    height: 1600,
                     refresh_mhz: 60_000,
                 },
             )
@@ -4337,7 +4466,7 @@ mod tests {
         assert_eq!(canvas.members["display-right"].rect.x, 1920);
         assert_eq!(canvas.members["display-right"].rect.y, 0);
         assert_eq!(canvas.members["display-right"].rect.width, 2560);
-        assert_eq!(canvas.members["display-right"].rect.height, 1440);
+        assert_eq!(canvas.members["display-right"].rect.height, 1600);
         assert_eq!(settings.canvas_revision(), receipt.revision);
         assert_eq!(
             router.snapshot_canvases().await.canvases[0].extent,
@@ -4345,7 +4474,37 @@ mod tests {
                 x: 0,
                 y: 0,
                 width: 4480,
-                height: 1440,
+                height: 1600,
+            })
+        );
+
+        router
+            .set_display_metrics(
+                right.id,
+                DisplayMetrics {
+                    width: 1280,
+                    height: 800,
+                    refresh_mhz: 60_000,
+                },
+            )
+            .await;
+
+        assert!(last_composition_config(&mut left.rx).is_none());
+        assert!(last_composition_config(&mut right.rx).is_some());
+        let canvas = settings.canvas(&receipt.canvas_id).unwrap();
+        assert_eq!(canvas.members["display-right"].rect.width, 2560);
+        assert_eq!(canvas.members["display-right"].rect.height, 1600);
+        let snapshot = router.snapshot_canvases().await;
+        let right_member = snapshot.canvases[0]
+            .members
+            .iter()
+            .find(|member| member.settings_key == "display-right")
+            .unwrap();
+        assert_eq!(
+            right_member.minimum_scale_to,
+            Some(CanvasSize {
+                width: 1280,
+                height: 800,
             })
         );
 
@@ -4380,21 +4539,25 @@ mod tests {
     async fn duplicate_canvas_members_attach_to_the_same_projection() {
         let settings = test_settings_store().await;
         let receipt = settings
-            .create_canvas(crate::settings::CanvasDraft {
-                name: "Mirror".into(),
-                members: HashMap::from([(
-                    "same-display".into(),
-                    crate::settings::CanvasMemberPrefs {
-                        rect: CanvasRect {
-                            x: 0,
-                            y: 0,
-                            width: 1920,
-                            height: 1080,
+            .create_canvas(
+                crate::settings::CanvasDraft {
+                    name: "Mirror".into(),
+                    members: HashMap::from([(
+                        "same-display".into(),
+                        crate::settings::CanvasMemberPrefs {
+                            rect: CanvasRect {
+                                x: 0,
+                                y: 0,
+                                width: 1920,
+                                height: 1080,
+                            },
+                            aspect_locked: true,
                         },
-                    },
-                )]),
-                layout: None,
-            })
+                    )]),
+                    layout: None,
+                },
+                &HashMap::new(),
+            )
             .unwrap();
         let manager = Arc::new(RendererManager::new_default());
         let router = Router::new(manager.clone());
@@ -4426,9 +4589,16 @@ mod tests {
             );
         }
 
-        let second = router
-            .register_display(reg_iid("Mirror B", "same-display"))
-            .await;
+        let mut second_registration = reg_iid("Mirror B", "same-display");
+        second_registration.metrics.width = 2560;
+        second_registration.metrics.height = 720;
+        let second = router.register_display(second_registration).await;
+        let rect = CanvasRect {
+            x: 0,
+            y: 0,
+            width: 2560,
+            height: 1080,
+        };
         let inner = router.inner.lock().await;
         for display_id in [first.id, second.id] {
             let links = inner.table.links_for_display(display_id);
@@ -4446,27 +4616,38 @@ mod tests {
         drop(inner);
         let canvas = router.snapshot_canvases().await;
         assert_eq!(canvas.canvases[0].members[0].display_ids.len(), 2);
+        assert_eq!(
+            canvas.canvases[0].members[0].minimum_scale_to,
+            Some(CanvasSize {
+                width: 2560,
+                height: 1080,
+            })
+        );
     }
 
     #[tokio::test]
     async fn config_resolver_selects_each_canvas_once_and_rejects_member_display_targets() {
         let settings = test_settings_store().await;
         let receipt = settings
-            .create_canvas(crate::settings::CanvasDraft {
-                name: "Office".into(),
-                members: HashMap::from([(
-                    "canvas-display".into(),
-                    crate::settings::CanvasMemberPrefs {
-                        rect: CanvasRect {
-                            x: 0,
-                            y: 0,
-                            width: 100,
-                            height: 100,
+            .create_canvas(
+                crate::settings::CanvasDraft {
+                    name: "Office".into(),
+                    members: HashMap::from([(
+                        "canvas-display".into(),
+                        crate::settings::CanvasMemberPrefs {
+                            rect: CanvasRect {
+                                x: 0,
+                                y: 0,
+                                width: 100,
+                                height: 100,
+                            },
+                            aspect_locked: true,
                         },
-                    },
-                )]),
-                layout: None,
-            })
+                    )]),
+                    layout: None,
+                },
+                &HashMap::new(),
+            )
             .unwrap();
         let router = Router::new(Arc::new(RendererManager::new_default()));
         router.attach_settings(settings);

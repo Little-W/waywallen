@@ -16,14 +16,18 @@ QtObject {
         const rect = member.rect || member || ({});
         const key = String(member.settingsKey || "");
         const matches = (displays || []).filter(display => display.settingsKey === key);
+        const width = Math.max(1, Number(rect.width || (matches[0]?.width ?? 1920)));
+        const height = Math.max(1, Number(rect.height || (matches[0]?.height ?? 1080)));
         return {
             settingsKey: key,
             label: matches.length > 0 ? (matches[0].displayLabel || key) : key,
             x: Number(rect.x || 0),
             y: Number(rect.y || 0),
-            width: Math.max(1, Number(rect.width || (matches[0]?.width ?? 1920))),
-            height: Math.max(1, Number(rect.height || (matches[0]?.height ?? 1080))),
-            onlineCount: matches.length
+            width: width,
+            height: height,
+            minimumScaleTo: member.minimumScaleTo || ({}),
+            onlineCount: Number(member.onlineCount ?? matches.length),
+            aspectLocked: member.aspectLocked ?? true
         };
     }
 
@@ -41,7 +45,8 @@ QtObject {
                     x: Number(member.x || 0),
                     y: Number(member.y || 0),
                     width: Math.max(1, Number(member.width || 1)),
-                    height: Math.max(1, Number(member.height || 1))
+                    height: Math.max(1, Number(member.height || 1)),
+                    aspectLocked: member.aspectLocked ?? true
                 }));
         return JSON.stringify({
             name: stateName,
@@ -66,13 +71,14 @@ QtObject {
         dirty = false;
     }
 
-    function refreshMemberSizes(canvas) {
+    function refreshMemberConfig(canvas) {
         if (!canvas || canvasObject?.id !== canvas.id)
             return;
         canvasObject = canvas;
+        baseRevision = canvas.revision || baseRevision;
         const currentRows = (canvas.members || []).map(member => rowForMember(member));
         const currentByKey = new Map(currentRows.map(member => [member.settingsKey, member]));
-        const mergeSizes = rows => rows.map(member => {
+        const mergeConfig = rows => rows.map(member => {
                 const current = currentByKey.get(member.settingsKey);
                 if (!current)
                     return member;
@@ -80,13 +86,15 @@ QtObject {
                     label: current.label,
                     width: current.width,
                     height: current.height,
-                    onlineCount: current.onlineCount
+                    minimumScaleTo: current.minimumScaleTo,
+                    onlineCount: current.onlineCount,
+                    aspectLocked: current.aspectLocked
                 });
             });
-        members = mergeSizes(members);
+        members = mergeConfig(members);
         if (baseline.length) {
             const saved = JSON.parse(baseline);
-            baseline = serializedState(saved.name, mergeSizes(saved.members || []));
+            baseline = serializedState(saved.name, mergeConfig(saved.members || []));
         }
         refreshDirty();
     }
@@ -156,7 +164,6 @@ QtObject {
         if (!key.length || members.some(member => member.settingsKey === key))
             return;
         const next = members.slice();
-        const same = (displays || []).filter(item => item.settingsKey === key);
         next.push({
             settingsKey: key,
             label: display.displayLabel,
@@ -164,7 +171,12 @@ QtObject {
             y: Math.round(Number(y || 0) / 10) * 10,
             width: Math.max(1, Number(display.width || 1920)),
             height: Math.max(1, Number(display.height || 1080)),
-            onlineCount: same.length
+            minimumScaleTo: {
+                width: Math.max(1, Number(display.width || 1920)),
+                height: Math.max(1, Number(display.height || 1080))
+            },
+            onlineCount: 1,
+            aspectLocked: true
         });
         members = next;
         refreshDirty();
