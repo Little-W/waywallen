@@ -1430,6 +1430,99 @@ W.CupertinoPage {
                             }
                         }
 
+                        MD.Divider {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 8
+                            Layout.bottomMargin: 4
+                            visible: root.selectedKind === "display"
+                        }
+
+                        ColumnLayout {
+                            id: currentWallpaperCard
+                            readonly property bool hasAssignment: root.selectedWallpaperId.length > 0
+                            readonly property var wallpaper: currentWallpaperQuery.wallpaper
+                            readonly property bool loaded: (wallpaper?.id_proto ?? "") === root.selectedWallpaperId
+
+                            Layout.fillWidth: true
+                            visible: root.selectedKind === "display"
+                            spacing: 8
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                MD.Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Current wallpaper")
+                                    typescale: MD.Token.typescale.title_small
+                                    color: MD.Token.color.on_surface
+                                }
+
+                            }
+
+                            W.CupertinoPane {
+                                Layout.fillWidth: true
+                                visible: currentWallpaperCard.hasAssignment
+                                padding: 8
+                                radius: 12
+                                backgroundColor: W.Global.cupertinoCard
+
+                                contentItem: RowLayout {
+                                    spacing: 12
+
+                                    W.ThumbnailImage {
+                                        Layout.preferredWidth: 128
+                                        Layout.preferredHeight: 72
+                                        visible: currentWallpaperCard.loaded
+                                        source: currentWallpaperCard.wallpaper?.preview ?? ""
+                                        resource: currentWallpaperCard.wallpaper?.resource ?? ""
+                                        wpType: currentWallpaperCard.wallpaper?.wpType ?? ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        radius: 8
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        spacing: 2
+
+                                        MD.Text {
+                                            Layout.fillWidth: true
+                                            text: currentWallpaperCard.loaded ? (currentWallpaperCard.wallpaper?.name || qsTr("Untitled")) : qsTr("Loading…")
+                                            typescale: MD.Token.typescale.body_large
+                                            color: MD.Token.color.on_surface
+                                            elide: Text.ElideRight
+                                        }
+
+                                        MD.Text {
+                                            Layout.fillWidth: true
+                                            visible: currentWallpaperCard.loaded
+                                            text: currentWallpaperCard.wallpaper?.wpType ?? ""
+                                            typescale: MD.Token.typescale.label_medium
+                                            color: MD.Token.color.on_surface_variant
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    MD.IconButton {
+                                        icon.name: MD.Token.icon.tune
+                                        enabled: !currentWallpaperQuery.querying
+                                        MD.ToolTip.visible: hovered
+                                        MD.ToolTip.text: qsTr("Wallpaper settings")
+                                        onClicked: root.openCurrentWallpaperSettings()
+                                    }
+                                }
+                            }
+
+                            MD.Text {
+                                Layout.fillWidth: true
+                                visible: !currentWallpaperCard.hasAssignment
+                                text: qsTr("No wallpaper assigned")
+                                typescale: MD.Token.typescale.body_medium
+                                color: MD.Token.color.on_surface_variant
+                            }
+                        }
+
                         // ---- Layout (fillmode + location) ----
                         MD.Divider {
                             Layout.fillWidth: true
@@ -1650,98 +1743,6 @@ W.CupertinoPage {
                             }
                         }
 
-                        MD.Divider {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 8
-                            Layout.bottomMargin: 4
-                            visible: root.selectedKind === "display"
-                        }
-
-                        ColumnLayout {
-                            id: currentWallpaperCard
-                            readonly property bool hasAssignment: root.selectedWallpaperId.length > 0
-                            readonly property var wallpaper: currentWallpaperQuery.wallpaper
-                            readonly property bool loaded: (wallpaper?.id_proto ?? "") === root.selectedWallpaperId
-
-                            Layout.fillWidth: true
-                            visible: root.selectedKind === "display"
-                            spacing: 8
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-
-                                MD.Text {
-                                    Layout.fillWidth: true
-                                    text: qsTr("Current wallpaper")
-                                    typescale: MD.Token.typescale.title_small
-                                    color: MD.Token.color.on_surface
-                                }
-
-                            }
-
-                            W.CupertinoPane {
-                                Layout.fillWidth: true
-                                visible: currentWallpaperCard.hasAssignment
-                                padding: 8
-                                radius: 12
-                                backgroundColor: W.Global.cupertinoCard
-
-                                contentItem: RowLayout {
-                                    spacing: 12
-
-                                    W.ThumbnailImage {
-                                        Layout.preferredWidth: 128
-                                        Layout.preferredHeight: 72
-                                        visible: currentWallpaperCard.loaded
-                                        source: currentWallpaperCard.wallpaper?.preview ?? ""
-                                        resource: currentWallpaperCard.wallpaper?.resource ?? ""
-                                        wpType: currentWallpaperCard.wallpaper?.wpType ?? ""
-                                        fillMode: Image.PreserveAspectCrop
-                                        radius: 8
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        Layout.minimumWidth: 0
-                                        spacing: 2
-
-                                        MD.Text {
-                                            Layout.fillWidth: true
-                                            text: currentWallpaperCard.loaded ? (currentWallpaperCard.wallpaper?.name || qsTr("Untitled")) : qsTr("Loading…")
-                                            typescale: MD.Token.typescale.body_large
-                                            color: MD.Token.color.on_surface
-                                            elide: Text.ElideRight
-                                        }
-
-                                        MD.Text {
-                                            Layout.fillWidth: true
-                                            visible: currentWallpaperCard.loaded
-                                            text: currentWallpaperCard.wallpaper?.wpType ?? ""
-                                            typescale: MD.Token.typescale.label_medium
-                                            color: MD.Token.color.on_surface_variant
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-
-                                    MD.IconButton {
-                                        icon.name: MD.Token.icon.tune
-                                        enabled: !currentWallpaperQuery.querying
-                                        MD.ToolTip.visible: hovered
-                                        MD.ToolTip.text: qsTr("Wallpaper settings")
-                                        onClicked: root.openCurrentWallpaperSettings()
-                                    }
-                                }
-                            }
-
-                            MD.Text {
-                                Layout.fillWidth: true
-                                visible: !currentWallpaperCard.hasAssignment
-                                text: qsTr("No wallpaper assigned")
-                                typescale: MD.Token.typescale.body_medium
-                                color: MD.Token.color.on_surface_variant
-                            }
-                        }
                     }
                 }
             }
