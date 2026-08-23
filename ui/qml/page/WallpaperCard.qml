@@ -1,5 +1,6 @@
 pragma ValueTypeBehavior: Assertable
 import QtQuick
+import QtQuick.Effects
 import Qcm.Material as MD
 import waywallen.ui as W
 
@@ -80,6 +81,7 @@ Item {
     readonly property real _cellInset: 6
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    readonly property bool selectionHighlighted: root.selected || root.current
     property bool _pooled: false
     readonly property bool gridMoving: GridView.view
                                             ? (GridView.view.moving || GridView.view.flicking)
@@ -125,6 +127,9 @@ Item {
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
+        // Raise the active card above its neighbours so its soft selection
+        // shadow stays continuous at every edge of the grid cell.
+        z: root.selectionHighlighted ? 1 : 0
         transform: Translate {
             id: m_reflowTranslate
         }
@@ -182,13 +187,33 @@ Item {
                 cacheAnimatedFrames: false
             }
 
-            // A crisp two-stage outline stays readable on both pale and dark
-            // wallpapers. It does not resize the image or use a shadow, so
-            // selection remains stable during high-refresh grid motion.
+            // Render only a soft aura behind the preview. MultiEffect also
+            // composited its border-shaped source, which read as a second
+            // outline instead of light fading away from the selection frame.
+            RectangularShadow {
+                anchors.fill: m_thumb
+                visible: opacity > 0.001
+                opacity: root.selectionHighlighted ? 0.62 : 0.0
+                z: -1
+                color: W.Global.effectiveAccentColor
+                blur: 18
+                spread: 1
+                radius: root._radius
+                offset: Qt.vector2d(0, 0)
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 160
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+
+            // Keep one crisp accent outline above the soft aura.
             Rectangle {
                 anchors.fill: m_thumb
                 visible: opacity > 0.001
-                opacity: root.selected || root.current ? 1.0 : 0.0
+                opacity: root.selectionHighlighted ? 1.0 : 0.0
                 color: "transparent"
                 radius: root._radius
                 border.width: 4
@@ -202,14 +227,6 @@ Item {
                     }
                 }
 
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    color: "transparent"
-                    radius: Math.max(0, parent.radius - 4)
-                    border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.90)
-                }
             }
 
             // Scrim aligns to the image control's bounds; spans the

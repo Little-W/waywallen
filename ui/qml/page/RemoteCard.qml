@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import Qcm.Material as MD
 import waywallen.ui as W
 
@@ -108,6 +109,7 @@ Item {
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
+        z: root.current ? 1 : 0
         transform: Translate {
             id: m_reflowTranslate
         }
@@ -161,6 +163,28 @@ Item {
                 cacheAnimatedFrames: true
             }
 
+            // Match WallpaperCard's source-free aura. Keeping the analytic
+            // shadow behind the preview avoids both a duplicate outline and
+            // any effect pass over the remote GIF texture.
+            RectangularShadow {
+                anchors.fill: m_thumb
+                visible: opacity > 0.001
+                opacity: root.current ? 0.62 : 0.0
+                z: -1
+                color: W.Global.effectiveAccentColor
+                blur: 18
+                spread: 1
+                radius: root._radius
+                offset: Qt.vector2d(0, 0)
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 160
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+
             Rectangle {
                 anchors.fill: m_thumb
                 visible: opacity > 0.001
@@ -178,14 +202,6 @@ Item {
                     }
                 }
 
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    color: "transparent"
-                    radius: Math.max(0, parent.radius - 4)
-                    border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.90)
-                }
             }
 
             Rectangle {
