@@ -5,11 +5,25 @@ import waywallen.ui as W
 
 Item {
     id: root
+    objectName: "wallpaperCard"
 
     required property var model
     required property int index
     property var wallpaper: model
     property bool selected: false
+    property bool current: false
+    // Cached PageContainer entries stay constructed after navigating away.
+    // Keep their poster, but never leave an animation decoder active.
+    property bool pageActive: true
+    // WallpaperPage flips this only once scrolling has stayed still briefly.
+    // It prevents a visible row of decoders from starting on the flick-end
+    // frame while retaining all poster textures.
+    property bool animationSettled: true
+    // Set only for the one topology change after a live viewport resize has
+    // settled. Per-frame size changes bypass these animations entirely.
+    property bool reflowTransitionActive: false
+    property bool reflowReverse: false
+    property point _reflowSceneOrigin: Qt.point(0, 0)
     property real itemWidth: width
     property real itemHeight: height
 
@@ -21,18 +35,77 @@ Item {
     signal clicked(int modifiers)
     signal selectionRequested(int modifiers)
 
+    property bool _reflowPrepared: false
+
+    function prepareReflow() {
+        if (!reflowTransitionActive)
+            return;
+        reflowXAnimation.stop();
+        reflowYAnimation.stop();
+        m_reflowTranslate.x = 0;
+        m_reflowTranslate.y = 0;
+        _reflowSceneOrigin = m_card.mapToItem(null, 0, 0);
+        _reflowPrepared = true;
+    }
+
+    function startPreparedReflow() {
+        if (!reflowTransitionActive || !_reflowPrepared)
+            return;
+        const currentOrigin = m_card.mapToItem(null, 0, 0);
+        m_reflowTranslate.x = _reflowSceneOrigin.x - currentOrigin.x;
+        m_reflowTranslate.y = _reflowSceneOrigin.y - currentOrigin.y;
+        _reflowPrepared = false;
+        reflowXAnimation.restart();
+        reflowYAnimation.restart();
+    }
+
+    onReflowTransitionActiveChanged: {
+        if (!reflowTransitionActive) {
+            _reflowPrepared = false;
+            reflowXAnimation.stop();
+            reflowYAnimation.stop();
+            m_reflowTranslate.x = 0;
+            m_reflowTranslate.y = 0;
+            return;
+        }
+        // The GridView explicitly completes this FLIP in the same event-loop
+        // turn as forceLayout().  Deferring it with Qt.callLater exposed one
+        // fully-relayouted frame, perceived as a flash on a 165 Hz output.
+        root.prepareReflow();
+    }
+
     // Content cards keep their own modest rounding; the window outline is
     // handled by KWin/LightlyShaders and is intentionally unrelated.
-    readonly property int _radius: 12
+    readonly property real _radius: 12
+    readonly property real _cellInset: 6
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    property bool _pooled: false
     readonly property bool gridMoving: GridView.view
                                             ? (GridView.view.moving || GridView.view.flicking)
                                             : false
     // The shell shows a full-resolution snapshot while its width changes.
     // Suspend animated thumbnail decoding underneath it; static previews and
     // their source resolution are untouched.
-    readonly property bool sceneMoving: gridMoving || W.Global.sidebarAnimating
+    readonly property bool sceneMoving: root._pooled
+                                       || !root.pageActive
+                                       || !root.animationSettled
+                                       || root.reflowTransitionActive
+                                       || gridMoving
+                                       || W.Global.windowResizing
+                                       || W.Global.contentGeometryAnimating
+                                       || W.Global.sidebarAnimating
+    // Retain only a decoder that was already ready before the gesture.  This
+    // keeps the scroll-start frame light without allowing cache-buffer or
+    // cached-page delegates to remain animated.
+    readonly property bool retainPausedAnimation: !root._pooled
+                                                  && root.pageActive
+                                                  && !W.Global.sidebarAnimating
+                                                  && (root.reflowTransitionActive
+                                                      || gridMoving
+                                                      || W.Global.windowResizing
+                                                      || W.Global.contentGeometryAnimating
+                                                      || !root.animationSettled)
     // Keep preloaded GIF delegates quiet.  `cacheBuffer` intentionally retains
     // a little more than one row for smooth image hand-off, but those cards
     // are not on screen and should not decode or upload animation frames.
@@ -52,11 +125,34 @@ Item {
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
+        transform: Translate {
+            id: m_reflowTranslate
+        }
+
+        // Animate rendered card geometry only for the settled column reflow.
+        // GridView.cellWidth itself always matches the viewport immediately,
+        // so no stale-width strip can appear at the page edge.
+        Behavior on width {
+            enabled: root.reflowTransitionActive
+            NumberAnimation {
+                duration: 220
+                easing.type: root.reflowReverse ? Easing.InCubic
+                                                : Easing.OutCubic
+            }
+        }
+        Behavior on height {
+            enabled: root.reflowTransitionActive
+            NumberAnimation {
+                duration: 220
+                easing.type: root.reflowReverse ? Easing.InCubic
+                                                : Easing.OutCubic
+            }
+        }
 
         Item {
             id: m_cell
             anchors.fill: parent
-            anchors.margins: 6
+            anchors.margins: root._cellInset
 
             W.ThumbnailImage {
                 id: m_thumb
@@ -67,24 +163,53 @@ Item {
                 fillMode: Image.PreserveAspectCrop
                 radius: root._radius
                 // Fixed rather than geometry-bound so sidebar transitions do
-                // not cause every visible image to be decoded again.  256 px
-                // remains comfortably above the normal 112–260 px card size.
-                maximumSourceSize: 256
+                // not cause every visible image to be decoded again. 512 px
+                // preserves detail on high-DPI and wide-card layouts without
+                // returning to full-resolution Workshop textures.
+                maximumSourceSize: 512
+                // Keep generated fallbacks in the same stable tier so layout
+                // animation never reloads or upscales an undersized poster.
+                thumbnailCacheEdge: 512
                 motionActive: root.sceneMoving
                 animationEnabled: root.animationEnabled
+                staticPosterEnabled: true
+                // Keep poster generation subscribed while this page owns the
+                // delegate. Tying it to `animationEnabled` cancelled every
+                // cold request at wheel-start and left newly visible cards
+                // without either a poster or an animated fallback.
+                posterRequestAllowed: !root._pooled && root.pageActive
+                retainPausedAnimation: root.retainPausedAnimation
+                cacheAnimatedFrames: false
             }
 
-            // Selection never resizes the thumbnail or paints the whole grid
-            // cell.  A fine accent outline stays stable while users make a
-            // multi-selection across differently sized cells.
+            // A crisp two-stage outline stays readable on both pale and dark
+            // wallpapers. It does not resize the image or use a shadow, so
+            // selection remains stable during high-refresh grid motion.
             Rectangle {
                 anchors.fill: m_thumb
-                visible: root.selected
+                visible: opacity > 0.001
+                opacity: root.selected || root.current ? 1.0 : 0.0
                 color: "transparent"
                 radius: root._radius
-                border.width: 2
+                border.width: 4
                 border.color: W.Global.effectiveAccentColor
                 z: 2
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 160
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    color: "transparent"
+                    radius: Math.max(0, parent.radius - 4)
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.90)
+                }
             }
 
             // Scrim aligns to the image control's bounds; spans the
@@ -154,6 +279,24 @@ Item {
         }
     }
 
+    NumberAnimation {
+        id: reflowXAnimation
+        target: m_reflowTranslate
+        property: "x"
+        to: 0
+        duration: 220
+        easing.type: root.reflowReverse ? Easing.InCubic : Easing.OutCubic
+    }
+
+    NumberAnimation {
+        id: reflowYAnimation
+        target: m_reflowTranslate
+        property: "y"
+        to: 0
+        duration: 220
+        easing.type: root.reflowReverse ? Easing.InCubic : Easing.OutCubic
+    }
+
     Rectangle {
         anchors.top: m_card.top
         anchors.left: m_card.left
@@ -164,7 +307,7 @@ Item {
         visible: root.selected
         color: W.Global.effectiveAccentColor
         border.color: W.Global.cupertinoCard
-        border.width: 2
+        border.width: 3
 
         MD.Icon {
             anchors.centerIn: parent
@@ -173,4 +316,10 @@ Item {
             color: MD.Token.color.on_primary
         }
     }
+
+    // GridView's reuse pool retains the delegate object.  Releasing only the
+    // animated overlay here avoids carrying GIF frame maps between unrelated
+    // models while the persistent poster makes the next use immediate.
+    GridView.onPooled: root._pooled = true
+    GridView.onReused: root._pooled = false
 }
