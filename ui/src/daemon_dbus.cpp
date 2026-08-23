@@ -276,8 +276,7 @@ void DaemonDBusClient::on_ready() {
 
 void DaemonDBusClient::on_shutting_down() {
     qDebug("DaemonDBusClient: ShuttingDown signal received");
-    set_status(Disconnected);
-    // Keep m_ws_port until NameOwnerChanged confirms the unregister.
+    QCoreApplication::quit();
 }
 
 void DaemonDBusClient::on_properties_changed(const QString& iface, const QVariantMap& changed,

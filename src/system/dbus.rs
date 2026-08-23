@@ -74,7 +74,7 @@ impl Daemon1 {
     }
 
     async fn open_ui(&self) -> zbus::fdo::Result<()> {
-        if !crate::spawn_ui(&self.app) {
+        if !crate::open_or_raise_ui(&self.app).await {
             return Err(zbus::fdo::Error::Failed(
                 "waywallen-ui not available".into(),
             ));
@@ -219,7 +219,7 @@ impl Daemon1 {
 }
 
 /// Single-instance gate.
-/// Claims `BUS_NAME` with `DO_NOT_QUEUE`, or hands off UI launch.
+/// Claims `BUS_NAME` with `DO_NOT_QUEUE`, or execs the UI (keeps activation token).
 pub async fn acquire_or_handoff(ui_path: Option<&Path>) -> Connection {
     let conn = match Connection::session().await {
         Ok(c) => c,
