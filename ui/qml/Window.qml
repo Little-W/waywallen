@@ -189,6 +189,12 @@ MD.ApplicationWindow {
     property real sidebarSnapshotWidth: 0
     property real sidebarSnapshotHeight: 0
     property var sidebarSnapshotResult: null
+    // Status is a lightweight vertical form.  Unlike the wallpaper grids it
+    // can follow the sidebar's width directly, which prevents a captured
+    // pre-reflow frame and the live reflowed page from being composited at
+    // different horizontal positions.
+    readonly property bool sidebarUsesLiveStatusLayout: sidebarTransitionActive
+                                                        && currentPage === 3
 
     Behavior on sidebarVisualWidth {
         enabled: win.sidebarInitialized && !win.sidebarImmediateGeometry
@@ -271,8 +277,19 @@ MD.ApplicationWindow {
 
         sidebarTransitionActive = true;
         sidebarTransitionExpanded = expanded;
-        sidebarSnapshotPending = true;
         W.Global.sidebarAnimating = true;
+
+        // Capture is reserved for the two virtualized wallpaper grids.  The
+        // Status page has no expensive delegate reflow, and its live layout
+        // follows sidebarVisualWidth exactly.  This removes the temporary
+        // double image / vertical splice that a snapshot creates there.
+        if (currentPage === 3) {
+            sidebarSnapshotPending = false;
+            applySidebarTransition(expanded);
+            return;
+        }
+
+        sidebarSnapshotPending = true;
 
         const token = ++sidebarTransitionToken;
         const captureWidth = Math.max(0, desktopContent.width);
@@ -614,12 +631,19 @@ MD.ApplicationWindow {
                 ColumnLayout {
                     id: desktopContent
 
-                    // The content is reflowed once at its target width, then
-                    // translated inside the moving clipped viewport.
-                    x: Math.max(0, win.sidebarLayoutWidth
+                    // Wallpaper grids are reflowed once at their target
+                    // width, then translated inside the moving viewport.
+                    // Status instead tracks the live viewport width; it is a
+                    // small form and doing so avoids compositing two layouts
+                    // with mismatched x positions during sidebar motion.
+                    readonly property real effectiveSidebarWidth:
+                        win.sidebarUsesLiveStatusLayout
+                        ? win.sidebarVisualWidth
+                        : win.sidebarLayoutWidth
+                    x: Math.max(0, effectiveSidebarWidth
                                  + (win.isCompact ? 0 : 1) - contentViewport.x)
                     y: 0
-                    width: Math.max(0, desktopShell.width - win.sidebarLayoutWidth
+                    width: Math.max(0, desktopShell.width - effectiveSidebarWidth
                                     - (win.isCompact ? 0 : 1))
                     height: parent.height
                     spacing: 0
