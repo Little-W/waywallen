@@ -43,7 +43,14 @@ endif()
 
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 include(${CMAKE_SOURCE_DIR}/cmake/FetchDeps.cmake)
+set(QML_MATERIAL_BUILD_TYPE STATIC CACHE STRING "" FORCE)
 fetchdeps(${CMAKE_SOURCE_DIR}/deps.json)
+
+get_target_property(WAYWALLEN_QML_MATERIAL_PLUGIN_TARGET
+                    qml_material::qml_material QT_QML_MODULE_PLUGIN_TARGET)
+if(NOT TARGET "${WAYWALLEN_QML_MATERIAL_PLUGIN_TARGET}")
+  message(FATAL_ERROR "QmlMaterial static QML plugin target is unavailable")
+endif()
 
 qt_standard_project_setup()
 
@@ -310,6 +317,7 @@ target_link_libraries(waywallen-qml
     Qt6::ProtobufWellKnownTypes
     waywallen-control
     qml_material::qml_material
+    ${WAYWALLEN_QML_MATERIAL_PLUGIN_TARGET}
     ncrequest
     qextra
     wavsen::decode

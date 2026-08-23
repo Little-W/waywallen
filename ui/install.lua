@@ -7,6 +7,13 @@ lito.install({
       destination = "bin/waywallen-ui",
     },
   },
+  external_assets = {
+    {
+      dependency = "waywallen-daemon",
+      set = "waywallen",
+      destination = "bin",
+    },
+  },
   files = {
     {
       source = "assets/waywallen-ui.svg",

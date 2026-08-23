@@ -155,5 +155,9 @@ targets = [
 [external-dependencies.cmake.qml-material]
 workspace = true
 targets = [
-  { name = "qml_material::qml_material", visibility = "private" },
+  { name = "qml_material::waywallen", visibility = "private" },
 ]
+
+[external-dependencies.cargo.waywallen-daemon]
+workspace = true
+usage = "runtime"

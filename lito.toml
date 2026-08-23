@@ -76,6 +76,13 @@ version = ">= 5"
 [workspace.external-sources.waywallen-control]
 path = "proto"
 
+[workspace.external-sources.waywallen-rust]
+path = "."
+
+[workspace.external-dependencies.cargo.waywallen-daemon]
+source = "waywallen-rust"
+package = "waywallen"
+
 [workspace.external-dependencies.cmake.waywallen-control]
 package = "waywallen-control"
 source = "waywallen-control"
@@ -87,7 +94,8 @@ git = "https://github.com/hypengw/QmlMaterial.git"
 [workspace.external-dependencies.cmake.qml-material]
 package = "qml_material"
 source = "qml-material"
-cache = { QM_BUILD_EXAMPLE = false, QM_BUILD_TESTS = false }
+adapter = "ui/cmake/QmlMaterial.cmake"
+cache = { QML_MATERIAL_BUILD_TYPE = "STATIC", QM_BUILD_EXAMPLE = false, QM_BUILD_TESTS = false }
 
 [workspace.external-dependencies.cmake.qt6]
 package = "Qt6"

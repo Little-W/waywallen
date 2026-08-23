@@ -9,6 +9,7 @@ qt.qml_module({
   qt = qt6,
   uri = "waywallen.ui",
   version = "0.3",
+  resource_prefix = "/",
   qml_files = {
     "qml/Window.qml",
     "qml/Global.qml",
@@ -66,6 +67,9 @@ qt.qml_module({
     "qml/page/SettingsPage.qml",
     "qml/page/DisplaysPage.qml",
     "qml/page/display/CanvasEditorState.qml",
+    "qml/page/display/CanvasDisplayList.qml",
+    "qml/page/display/DisplayLayoutControls.qml",
+    "qml/page/display/RendererConnectionPanel.qml",
     "qml/page/SourceManagePage.qml",
     "qml/page/AddLibraryPage.qml",
     "qml/page/AboutPage.qml",
