@@ -80,6 +80,7 @@ Item {
     readonly property real _cellInset: 6
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    readonly property bool selectionHighlighted: root.selected || root.current
     property bool _pooled: false
     readonly property bool gridMoving: GridView.view
                                             ? (GridView.view.moving || GridView.view.flicking)
@@ -125,6 +126,9 @@ Item {
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
+        // Raise the active card above its neighbours so its soft selection
+        // shadow stays continuous at every edge of the grid cell.
+        z: root.selectionHighlighted ? 1 : 0
         transform: Translate {
             id: m_reflowTranslate
         }
@@ -154,6 +158,24 @@ Item {
             anchors.fill: parent
             anchors.margins: root._cellInset
 
+            // The outline remains the precise selection boundary; this
+            // analytic elevation adds a restrained accent-tinted shadow below
+            // it without allocating a blurred texture for every card.
+            MD.Elevation {
+                anchors.fill: m_thumb
+                z: -1
+                elevation: root.selectionHighlighted
+                           ? MD.Token.elevation.level2
+                           : MD.Token.elevation.level0
+                color: W.Global.cupertinoDark
+                       ? Qt.rgba(0, 0, 0, 0.48)
+                       : Qt.rgba(W.Global.effectiveAccentColor.r,
+                                 W.Global.effectiveAccentColor.g,
+                                 W.Global.effectiveAccentColor.b,
+                                 0.30)
+                corners: MD.Util.corners(root._radius)
+            }
+
             W.ThumbnailImage {
                 id: m_thumb
                 anchors.fill: parent
@@ -182,13 +204,12 @@ Item {
                 cacheAnimatedFrames: false
             }
 
-            // A crisp two-stage outline stays readable on both pale and dark
-            // wallpapers. It does not resize the image or use a shadow, so
-            // selection remains stable during high-refresh grid motion.
+            // A crisp two-stage outline remains readable on both pale and
+            // dark wallpapers while the analytic elevation provides depth.
             Rectangle {
                 anchors.fill: m_thumb
                 visible: opacity > 0.001
-                opacity: root.selected || root.current ? 1.0 : 0.0
+                opacity: root.selectionHighlighted ? 1.0 : 0.0
                 color: "transparent"
                 radius: root._radius
                 border.width: 4

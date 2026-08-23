@@ -108,6 +108,7 @@ Item {
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
+        z: root.current ? 1 : 0
         transform: Translate {
             id: m_reflowTranslate
         }
@@ -133,6 +134,22 @@ Item {
             id: m_cell
             anchors.fill: parent
             anchors.margins: 6
+
+            // Match the local wallpaper selection treatment: an analytic
+            // shadow adds depth without introducing a per-card blur pass.
+            MD.Elevation {
+                anchors.fill: m_thumb
+                z: -1
+                elevation: root.current ? MD.Token.elevation.level2
+                                        : MD.Token.elevation.level0
+                color: W.Global.cupertinoDark
+                       ? Qt.rgba(0, 0, 0, 0.48)
+                       : Qt.rgba(W.Global.effectiveAccentColor.r,
+                                 W.Global.effectiveAccentColor.g,
+                                 W.Global.effectiveAccentColor.b,
+                                 0.30)
+                corners: MD.Util.corners(root._radius)
+            }
 
             W.ThumbnailImage {
                 id: m_thumb
