@@ -187,6 +187,7 @@ W.CupertinoPage {
 
     contentItem: MD.VerticalFlickable {
         id: m_flick
+        objectName: "statusScrollView"
         topMargin: 12
         leftMargin: 12
         rightMargin: 12

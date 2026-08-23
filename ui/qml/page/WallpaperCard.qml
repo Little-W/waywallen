@@ -123,6 +123,7 @@ Item {
 
     Item {
         id: m_card
+        objectName: "wallpaperCardSurface"
         width: root.cardWidth
         height: root.cardHeight
         anchors.centerIn: parent
@@ -182,6 +183,7 @@ Item {
 
             W.ThumbnailImage {
                 id: m_thumb
+                objectName: "wallpaperThumbnail"
                 anchors.fill: parent
                 source  : root.wallpaper?.preview ?? ""
                 resource: root.wallpaper?.resource ?? ""
@@ -211,6 +213,7 @@ Item {
             // A crisp two-stage outline remains readable on both pale and
             // dark wallpapers while the analytic elevation provides depth.
             Rectangle {
+                objectName: "wallpaperSelectionFrame"
                 anchors.fill: m_thumb
                 visible: opacity > 0.001
                 opacity: root.selectionHighlighted ? 1.0 : 0.0

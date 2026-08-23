@@ -190,6 +190,13 @@ Item {
     readonly property var _presentedImage: root._animatedLayerReady
                                           ? m_animated_loader.item
                                           : m_static_image
+    // Opt-in visual probes read this without traversing private loader state.
+    // It is also a useful invariant: exactly one ready layer must own the card
+    // whenever a non-empty source or generated thumbnail is available.
+    readonly property bool contentReady: root._animatedLayerReady
+                                         || (m_static_image.visible
+                                             && m_static_image.opacity > 0
+                                             && m_static_image.status === Image.Ready)
     readonly property real paintedWidth: _presentedImage ? _presentedImage.paintedWidth : 0
     readonly property real paintedHeight: _presentedImage ? _presentedImage.paintedHeight : 0
     readonly property int status: _presentedImage ? _presentedImage.status : Image.Null

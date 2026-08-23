@@ -4,6 +4,8 @@ module;
 #endif
 
 #include "QExtra/macro_qt.hpp"
+#include <QElapsedTimer>
+#include <QPointer>
 
 export module waywallen:app;
 export import :backend;
@@ -77,6 +79,13 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    void attachScrollTimingGrid();
+
+private Q_SLOTS:
+    void onScrollTimingContentYChanged();
+    void onScrollTimingMovementChanged();
 
 private:
     QScopedPointer<AppPrivate> d_ptr;

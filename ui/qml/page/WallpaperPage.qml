@@ -10,6 +10,7 @@ import waywallen.ui as W
 
 W.CupertinoPage {
     id: root
+    objectName: "wallpaperPage"
 
     // PageContainer caches this page.  Expose its active state to delegates
     // so leaving Wallpapers cannot leave GIF decoders ticking behind another
@@ -1218,6 +1219,9 @@ W.CupertinoPage {
                 // full-page blur effect.
                 MD.VerticalGridView {
                     id: m_grid_view
+                    // Only used by the opt-in C++ scroll telemetry probe.
+                    // It carries no handlers or work during normal launches.
+                    objectName: "wallpaperPreviewGrid"
 
                     anchors.left: parent.left
                     anchors.top: parent.top
@@ -1306,6 +1310,7 @@ W.CupertinoPage {
                     // handle stays reachable at the end of the list.
                     T.ScrollBar.vertical: MD.ScrollBar {
                         id: wallpaperScrollBar
+                        objectName: "wallpaperPreviewScrollBar"
                         active: wallpaperDesktopWheel.scrolling
                                 || m_grid_view.moving || pressed
 
@@ -1346,6 +1351,20 @@ W.CupertinoPage {
                     // animate down to the final five-column size.
                     visible: m_grid_view.count > 0 && _initialLayoutReady
 
+                    // Test-only override remains negative in production. It
+                    // lets the validation harness drive this exact layout at
+                    // 165 Hz without waiting for a top-level Wayland configure
+                    // round-trip on whichever physical screen opened the
+                    // non-focused test window.
+                    property real _diagnosticAvailableWidthOverride: -1
+                    // The C++ verification harness toggles this together
+                    // with its width override so the test exercises exactly
+                    // the same cheap scene state as a real top-level resize.
+                    property bool _diagnosticResizeActive: false
+                    on_DiagnosticResizeActiveChanged: {
+                        W.Global.windowResizing = _diagnosticResizeActive;
+                    }
+
                     // During a detail transition the pane's clip width moves,
                     // while the grid lays out directly at the destination
                     // width. This gives the card FLIP one stable destination
@@ -1354,8 +1373,12 @@ W.CupertinoPage {
                         0,
                         wallpaperSplitView.width
                         - (root.detailGridLayoutOpen ? 292 : 0))
-                    readonly property real _availableWidth: Math.max(
-                        0, _targetViewportWidth - leftMargin - rightMargin)
+                    readonly property real _availableWidth: _diagnosticAvailableWidthOverride >= 0
+                                                               ? _diagnosticAvailableWidthOverride
+                                                               : Math.max(0,
+                                                                          _targetViewportWidth
+                                                                          - leftMargin
+                                                                          - rightMargin)
                     readonly property int _calculatedCols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
                     // Keep the current column topology while configure events
                     // are streaming in. Otherwise crossing an integer column
@@ -1498,6 +1521,10 @@ W.CupertinoPage {
                     Component.onCompleted: {
                         _cols = _calculatedCols;
                         initialColumnSettleTimer.restart();
+                    }
+                    Component.onDestruction: {
+                        if (_diagnosticResizeActive)
+                            W.Global.windowResizing = false;
                     }
                     onWidthChanged: {
                         if (root.detailLayoutFocusActive)
@@ -1851,6 +1878,7 @@ W.CupertinoPage {
                 }
 
                 contentItem: WallpaperDetailPanel {
+                    objectName: "wallpaperDetailPanel"
                     wallpaperId: root.detailWallpaper?.id_proto ?? ""
                     fallbackWallpaper: root.detailWallpaper
                     showApply: true

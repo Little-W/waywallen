@@ -8,6 +8,7 @@ import waywallen.ui as W
 
 W.CupertinoPage {
     id: root
+    objectName: "discoverPage"
     showBackground: false
     padding: MD.MProp.size.isCompact ? 0 : 12
     // Keep the live toolbar flush with the structural title bar in desktop
@@ -769,6 +770,7 @@ W.CupertinoPage {
 
                     MD.VerticalGridView {
                         id: m_grid
+                        objectName: "discoverPreviewGrid"
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -831,6 +833,7 @@ W.CupertinoPage {
                         // live frosted material.
                         T.ScrollBar.vertical: MD.ScrollBar {
                             id: discoverScrollBar
+                            objectName: "discoverPreviewScrollBar"
                             active: discoverDesktopWheel.scrolling
                                     || m_grid.moving || pressed
                             parent: discoverGridViewport

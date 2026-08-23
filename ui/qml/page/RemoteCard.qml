@@ -153,6 +153,7 @@ Item {
 
             W.ThumbnailImage {
                 id: m_thumb
+                objectName: "discoverThumbnail"
                 anchors.fill: parent
                 source: root.previewUrl
                 resource: ""
