@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Qcm.Material as MD
+import waywallen.ui as W
 
 ColumnLayout {
     id: control
@@ -48,6 +49,7 @@ ColumnLayout {
         }
 
         MD.VerticalListView {
+            id: playlistList
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(260, Math.max(88, contentHeight + topMargin + bottomMargin))
             visible: control.sheetState.playlists.length > 0
@@ -58,6 +60,10 @@ ColumnLayout {
             rightMargin: 0
             topMargin: 0
             bottomMargin: 0
+
+            W.DesktopWheelScroll {
+                flickable: playlistList
+            }
 
             delegate: MD.ListItem {
                 id: selectPlaylistItem

@@ -37,6 +37,10 @@ W.CupertinoPage {
             leftMargin: 12
             rightMargin: 12
 
+            W.DesktopWheelScroll {
+                flickable: m_view
+            }
+
             delegate: MD.ListItem {
                 id: sourceItem
                 required property var modelData

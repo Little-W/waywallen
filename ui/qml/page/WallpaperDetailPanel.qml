@@ -523,6 +523,10 @@ Item {
             topMargin: 0
             bottomMargin: 8
 
+            W.DesktopWheelScroll {
+                flickable: m_detail_view
+            }
+
             header: ColumnLayout {
                 width: m_detail_view.contentWidth
                 spacing: 12

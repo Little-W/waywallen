@@ -147,6 +147,10 @@ W.CupertinoFrostedBottomSheet {
             topMargin: 0
             bottomMargin: 16
 
+            W.DesktopWheelScroll {
+                flickable: playlistSheetList
+            }
+
             delegate: MD.ListItem {
                 id: playlistSheetItem
                 required property var modelData

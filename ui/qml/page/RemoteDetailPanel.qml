@@ -99,6 +99,10 @@ Item {
             topMargin: 0
             bottomMargin: 8
 
+            W.DesktopWheelScroll {
+                flickable: detailView
+            }
+
             header: ColumnLayout {
                 width: detailView.contentWidth
                 spacing: 12

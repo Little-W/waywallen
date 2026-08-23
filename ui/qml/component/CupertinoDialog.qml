@@ -20,4 +20,9 @@ MD.Dialog {
         borderOpacity: 0.10
         elevation: root.mdState.elevation
     }
+
+    W.DesktopWheelScroll {
+        parent: root.contentItem
+        flickable: root.contentItem instanceof Flickable ? root.contentItem : null
+    }
 }

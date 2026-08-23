@@ -126,6 +126,10 @@ MD.Popup {
                 id: m_proc_model
             }
 
+            W.DesktopWheelScroll {
+                flickable: m_proc_list
+            }
+
             delegate: MD.ListItem {
                 id: m_item
                 width: ListView.view ? ListView.view.contentWidth : 0

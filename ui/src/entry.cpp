@@ -23,6 +23,15 @@ int run(int argc, char** argv) {
         && qEnvironmentVariable("QT_QUICK_BACKEND") != "software")
         qputenv("QSG_RENDER_LOOP", "threaded");
 
+    // The default threaded animation driver derives its time step from the
+    // screen/render-loop topology and may fall back to a roughly 16 ms timer
+    // when multiple QQuickWindows are visible.  This application commonly
+    // moves between mixed-refresh Wayland outputs and uses popup windows, so
+    // use Qt 6.5+'s elapsed-time driver unless the user explicitly selected a
+    // different policy. VSync and presentation throttling remain enabled.
+    if (! qEnvironmentVariableIsSet("QSG_USE_SIMPLE_ANIMATION_DRIVER"))
+        qputenv("QSG_USE_SIMPLE_ANIMATION_DRIVER", "1");
+
     auto request_init = ncrequest::global_init();
     if (request_init.is_err()) {
         auto error = rstd::cppstd::to_string(

@@ -102,6 +102,7 @@ set(SOURCES_NO_MOC
   src/query/qr_login_query.cpp
   src/query/plugin_action_query.cpp
   src/query/global_pause_query.cpp
+  src/scroll/animator.cpp
   src/thumb/service.cpp
 )
 
@@ -144,6 +145,7 @@ set(MOC_SOURCE_FILES
   src/query/qr_login_query.cppm
   src/query/plugin_action_query.cppm
   src/query/global_pause_query.cppm
+  src/scroll/animator.cppm
   src/thumb/service.cppm
 )
 set(MODULES
@@ -185,6 +187,7 @@ set(QML_FILES
   qml/component/GnomeDisplaysHelp.qml
   qml/component/LayerShellDisplaysHelp.qml
   qml/component/ThumbnailImage.qml
+  qml/component/DesktopWheelScroll.qml
   qml/component/SearchChip.qml
   qml/component/ValueSlider.qml
   qml/component/DetailActionBar.qml

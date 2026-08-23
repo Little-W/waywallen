@@ -21,4 +21,9 @@ MD.Pane {
         borderOpacity: 0.10
         elevation: root.elevation
     }
+
+    W.DesktopWheelScroll {
+        parent: root.contentItem
+        flickable: root.contentItem instanceof Flickable ? root.contentItem : null
+    }
 }
