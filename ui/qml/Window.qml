@@ -538,7 +538,6 @@ MD.ApplicationWindow {
                 width: Math.max(0, desktopShell.width - x)
                 height: parent.height
                 clip: true
-                enabled: !win.sidebarTransitionActive
                 z: 0
 
                 Timer {
@@ -589,6 +588,26 @@ MD.ApplicationWindow {
                             duration: 94
                             easing.type: Easing.OutCubic
                         }
+                    }
+                }
+
+                // Do not disable this viewport while its old snapshot is on
+                // screen.  `enabled: false` propagates into every child
+                // control, temporarily applying Qcm's disabled palette to
+                // Status-page plugin cards and actions.  An input-only shield
+                // keeps the transition inert without changing live content's
+                // visual state.
+                MouseArea {
+                    anchors.fill: parent
+                    visible: win.sidebarTransitionActive
+                    enabled: visible
+                    z: 2
+                    acceptedButtons: Qt.AllButtons
+                    hoverEnabled: true
+                    preventStealing: true
+
+                    onWheel: function(wheel) {
+                        wheel.accepted = true;
                     }
                 }
 
