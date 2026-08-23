@@ -77,6 +77,10 @@ Item {
     // out-of-bounds transparent strip from diluting the compact material.
     readonly property int snapshotY: separatorAtTop ? -blurVerticalOverscan : 0
     readonly property int snapshotHeight: height + blurVerticalOverscan
+    readonly property int _textureWidth: Math.max(64, Math.ceil(
+        width * Screen.devicePixelRatio * blurRenderScale / 64) * 64)
+    readonly property int _textureHeight: Math.max(64, Math.ceil(
+        snapshotHeight * Screen.devicePixelRatio * blurRenderScale / 64) * 64)
 
     default property alias content: contentLayer.data
 
@@ -96,20 +100,26 @@ Item {
                                 : root.blurSourceRect.y,
                             width,
                             height)
-        textureSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio
-                                                    * root.blurRenderScale)),
-                             Math.max(1, Math.ceil(height * Screen.devicePixelRatio
-                                                     * root.blurRenderScale)))
+        // Keep the already-diffuse source in coarse allocation buckets. Live
+        // one-pixel geometry changes then reuse the same GPU target instead
+        // of rebuilding a backdrop FBO for every configure.
+        textureSize: Qt.size(root._textureWidth, root._textureHeight)
         // This must stay live: scroll content should flow under both top and
         // bottom material bars rather than freezing at a timer cadence.
         live: root.visible && root.contentBlurEnabled
+              && !W.Global.windowResizing
+              && !W.Global.contentGeometryAnimating
         hideSource: false
         recursive: false
-        // Keep the FBO item in the scene graph. The opaque backing above it
-        // prevents this raw snapshot from ever being shown, while avoiding a
-        // compositor-dependent path where an invisible effect source does not
-        // continuously produce a texture for MultiEffect.
+        // Retain the FBO item while the material is live, but remove both the
+        // source and the MultiEffect pass from the scene graph during a live
+        // toplevel resize/detail reflow.  `live: false` only freezes the FBO;
+        // leaving this node visible still makes the renderer composite it on
+        // every frame.  The opaque fallback below remains in place until the
+        // material resumes.
         visible: root.contentBlurEnabled
+                 && !W.Global.windowResizing
+                 && !W.Global.contentGeometryAnimating
         smooth: true
     }
 
@@ -134,6 +144,8 @@ Item {
             width: sourceSnapshot.width
             height: sourceSnapshot.height
             visible: root.contentBlurEnabled
+                     && !W.Global.windowResizing
+                     && !W.Global.contentGeometryAnimating
             source: sourceSnapshot
             // Overscan and materialViewport clip the field explicitly. This
             // avoids MultiEffect allocating automatic padding around a narrow

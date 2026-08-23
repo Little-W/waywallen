@@ -13,6 +13,22 @@ QtObject {
     // deliberately not persisted: animated previews can pause for this short
     // transition without changing a user's wallpaper settings.
     property bool sidebarAnimating: false
+    // Live top-level Wayland configure bursts are treated as one transient
+    // scene state. Expensive backdrop effects can pause without changing any
+    // persisted appearance setting, then resume after geometry settles.
+    property bool windowResizing: false
+    // Internal split-view geometry (currently the wallpaper detail panel) can
+    // animate at the output refresh rate without also decoding GIFs or
+    // rebuilding a live backdrop texture on every intermediate width.
+    property bool contentGeometryAnimating: false
+    // Volatile copy of the wallpaper library's resolved grid settings. The
+    // Discover page uses this only until its own layout is explicitly changed;
+    // keeping the bridge in memory avoids constructing a second QSettings
+    // writer for WallpaperView during startup.
+    property bool wallpaperGridTweakReady: false
+    property int wallpaperGridItemSize: 162
+    property real wallpaperGridItemAspectRatio: 1
+    property int wallpaperGridLayoutMode: 0
     // Compact navigation is an overlay rather than a layout row. Pages use
     // this transient safe inset so their final item can scroll above it while
     // ordinary content still travels beneath the live material.

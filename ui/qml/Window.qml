@@ -46,6 +46,24 @@ MD.ApplicationWindow {
     // later navigation retains Qcm's normal motion.
     property bool contentPageTransitionsEnabled: false
 
+    function noteWindowResize() {
+        if (!visible)
+            return;
+        W.Global.windowResizing = true;
+        windowResizeSettleTimer.restart();
+    }
+
+    onWidthChanged: noteWindowResize()
+    onHeightChanged: noteWindowResize()
+
+    Timer {
+        id: windowResizeSettleTimer
+
+        interval: 96
+        repeat: false
+        onTriggered: W.Global.windowResizing = false
+    }
+
     function presentPopup(source, properties) {
         const presentation = m_popup_presenter.present(source, properties || {});
         presentation.failed.connect(presentation, function (error) {
@@ -407,6 +425,7 @@ MD.ApplicationWindow {
     Component.onDestruction: {
         changelogPresentation?.cancel();
         W.Global.sidebarAnimating = false;
+        W.Global.windowResizing = false;
         W.Global.compactNavigationInset = 0;
     }
 

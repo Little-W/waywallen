@@ -11,6 +11,11 @@ import waywallen.ui as W
 W.CupertinoPage {
     id: root
 
+    // PageContainer caches this page.  Expose its active state to delegates
+    // so leaving Wallpapers cannot leave GIF decoders ticking behind another
+    // page.
+    readonly property bool previewPageActive: T.StackView.status === T.StackView.Active
+
     W.WallpaperListQuery {
         id: wallpaperQuery
     }
@@ -224,6 +229,7 @@ W.CupertinoPage {
     }
 
     Component.onCompleted: {
+        publishWallpaperTweak();
         applySort();
         if (W.Notify.daemonPhase === W.Notify.DaemonPhase.Ready)
             reloadAll();
@@ -450,14 +456,24 @@ W.CupertinoPage {
     Connections {
         target: wallpaperTweakState
         function onItemSizeChanged() {
+            root.publishWallpaperTweak();
             root.forceWallpaperGridLayout();
         }
         function onItemAspectRatioChanged() {
+            root.publishWallpaperTweak();
             root.forceWallpaperGridLayout();
         }
         function onLayoutModeChanged() {
+            root.publishWallpaperTweak();
             root.forceWallpaperGridLayout();
         }
+    }
+
+    function publishWallpaperTweak() {
+        W.Global.wallpaperGridItemSize = wallpaperTweakState.itemSize;
+        W.Global.wallpaperGridItemAspectRatio = wallpaperTweakState.itemAspectRatio;
+        W.Global.wallpaperGridLayoutMode = wallpaperTweakState.layoutMode;
+        W.Global.wallpaperGridTweakReady = true;
     }
 
     function _buildSortRule() {
@@ -516,12 +532,144 @@ W.CupertinoPage {
     }
 
     property var selectedWallpaper: null
+    // Keep the panel's previous model alive until its close transition has
+    // finished. Clearing it at click time made the panel contents disappear
+    // before the panel itself could animate out.
+    property var detailWallpaper: null
+    readonly property bool detailPanelOpen: root.selectedWallpaper !== null
+                                                    && !root.selectionActive
+    // Adopt the destination grid topology at the start of the split-panel
+    // transition. Card surfaces then move from their captured scene positions
+    // instead of disappearing behind a white fade.
+    property bool detailGridLayoutOpen: false
+    property real detailPanelProgress: root.detailPanelOpen ? 1.0 : 0.0
+    property bool detailFocusPending: false
+    property bool smoothDetailFocusPending: false
+    // Closing the detail pane expands the grid back to its full-width
+    // topology. Keep the selected card as a visual anchor until that reflow
+    // has finished; detailWallpaper itself is deliberately cleared at the
+    // end of the panel animation and therefore cannot represent this state.
+    property bool restoreDetailFocusPending: false
+    property bool detailCloseAnchorActive: false
+    // Exposed only so the opt-in, focus-free validation hook can distinguish
+    // a rejected scroll target from a later GridView layout override.
+    property real detailRestoreFocusTargetY: NaN
+    property bool detailRestoreFocusScrollAccepted: false
+    readonly property bool detailLayoutFocusActive: root.detailWallpaper !== null
+                                                    && (root.detailPanelProgress > 0.001
+                                                        || detailPanelAnimation.running)
+
+    Behavior on detailPanelProgress {
+        NumberAnimation {
+            id: detailPanelAnimation
+
+            duration: 220
+            // Playing the same curve backwards makes close the temporal
+            // inverse of open instead of a second, unrelated retreat.
+            easing.type: root.detailPanelOpen ? Easing.OutCubic : Easing.InCubic
+            onRunningChanged: {
+                if (running) {
+                    // Keep the high-frequency split animation transform-only
+                    // where possible. Repeated forceLayout() plus
+                    // positionViewAtIndex() on every progress tick was the
+                    // source of the preview's visible size/position jitter.
+                    W.Global.contentGeometryAnimating = true;
+                    m_grid_view.previewAnimationsSettled = false;
+                    root.detailFocusPending = true;
+                } else {
+                    W.Global.contentGeometryAnimating = false;
+                    previewAnimationSettleTimer.restart();
+                    if (root.detailPanelProgress <= 0.001
+                            && root.selectedWallpaper === null) {
+                        root.detailCloseAnchorActive = false;
+                        root.detailWallpaper = null;
+                    }
+                    root.detailFocusPending = false;
+                    root.scheduleCurrentWallpaperFocus();
+                }
+            }
+        }
+    }
+
+    onSelectedWallpaperChanged: {
+        if (selectedWallpaper !== null) {
+            detailWallpaper = selectedWallpaper;
+            restoreDetailFocusPending = false;
+            detailCloseAnchorActive = false;
+        } else if (!root.selectionActive && detailWallpaper !== null
+                   && m_grid_view && m_grid_view.currentIndex >= 0) {
+            // The selected model stays represented by GridView.currentIndex
+            // after the panel closes. Restore it smoothly once the expanded
+            // column layout is final instead of letting it reflow offscreen.
+            restoreDetailFocusPending = true;
+            smoothDetailFocusPending = true;
+            detailCloseAnchorActive = true;
+        }
+        const layoutOpen = selectedWallpaper !== null && !root.selectionActive;
+        if (m_grid_view)
+            m_grid_view.beginDetailLayout(layoutOpen);
+        else
+            detailGridLayoutOpen = layoutOpen;
+        root.scheduleCurrentWallpaperFocus();
+    }
+    function scheduleCurrentWallpaperFocus() {
+        if (!m_grid_view || m_grid_view.currentIndex < 0)
+            return;
+        if (root.detailCloseAnchorActive)
+            return;
+        if (detailPanelAnimation.running) {
+            detailFocusPending = true;
+            return;
+        }
+        detailFocusTimer.restart();
+    }
+
+    function focusCurrentWallpaper() {
+        if (!m_grid_view || m_grid_view.currentIndex < 0
+                || (!root.detailLayoutFocusActive
+                    && !root.restoreDetailFocusPending))
+            return;
+        m_grid_view.forceLayout();
+        if (root.restoreDetailFocusPending) {
+            // onSelectedWallpaperChanged can run just before Behavior marks
+            // its NumberAnimation as running. The progress value is the
+            // reliable guard against sampling the pre-close column here.
+            if (root.detailPanelProgress > 0.001
+                    || detailPanelAnimation.running) {
+                root.detailFocusPending = true;
+                return;
+            }
+            // forceLayout() schedules the delegate-position polish. Reading
+            // currentItem.y in this same turn still returns the old column in
+            // Qt 6, so defer the coordinate read by a few render frames.
+            detailRestoreFocusTimer.restart();
+            return;
+        }
+        if (root.smoothDetailFocusPending && m_grid_view.currentItem) {
+            root.smoothDetailFocusPending = false;
+            const item = m_grid_view.currentItem;
+            const usableCenter = (m_grid_view.topMargin + m_grid_view.height
+                                  - m_grid_view.bottomMargin) / 2;
+            wallpaperDesktopWheel.scrollTo(item.y + item.height / 2
+                                           - usableCenter);
+            return;
+        }
+        root.smoothDetailFocusPending = false;
+        // Qt explicitly recommends positionViewAtIndex() instead of writing
+        // contentY for index positioning. Centering on every coalesced layout
+        // frame makes the selected wallpaper the stable visual anchor while
+        // the detail panel changes the number of grid columns.
+        m_grid_view.positionViewAtIndex(m_grid_view.currentIndex, GridView.Center);
+    }
     property var currentWallpaperSelect: null
     property var wallpaperSelectSheet: null
     property var wallpaperTweakSheet: null
     property var playlistListSheet: null
     property var filterPresentation: null
-    Component.onDestruction: root.filterPresentation?.cancel()
+    Component.onDestruction: {
+        root.filterPresentation?.cancel();
+        W.Global.contentGeometryAnimating = false;
+    }
     readonly property int selectionSheetReserve: wallpaperSelectSheetRelay.currentComponent ? 360 : 160
     readonly property int selectedWallpaperCount: root.currentWallpaperSelect ? root.currentWallpaperSelect.selectedCount : 0
     readonly property int removableSelectedWallpaperCount: root.currentWallpaperSelect ? root.currentWallpaperSelect.removableSelectedCount : 0
@@ -530,6 +678,8 @@ W.CupertinoPage {
 
     onSelectionActiveChanged: {
         if (selectionActive) {
+            restoreDetailFocusPending = false;
+            smoothDetailFocusPending = false;
             selectedWallpaper = null;
             if (m_grid_view)
                 m_grid_view.currentIndex = -1;
@@ -944,7 +1094,13 @@ W.CupertinoPage {
             return;
         }
 
+        // Once the detail pane is open, focus the next card with the same
+        // C++ spring trajectory used by high-refresh wheel scrolling. The
+        // initial detail opening still centres before its topology change.
+        const detailWasOpen = root.detailPanelOpen;
         m_grid_view.currentIndex = index;
+        root.smoothDetailFocusPending = detailWasOpen;
+        m_grid_view.forceActiveFocus();
         userWallpaperSelect.anchorIndex = index;
         root.selectedWallpaper = model.item(index);
     }
@@ -1028,13 +1184,24 @@ W.CupertinoPage {
     // made both pages calculate their startup grids from different widths.
     rightPadding: 0
 
-    contentItem: RowLayout {
-        spacing: 12
+    contentItem: Item {
+        id: wallpaperSplitView
+
+        // Use direct scene geometry for the animated split. Qt Quick Layouts
+        // can perform several negotiation passes for each fractional preferred
+        // width, which made the preview resize unevenly even though
+        // detailPanelProgress itself was smooth.
+        readonly property real detailWidth: 280 * root.detailPanelProgress
+        readonly property real detailGap: 12 * root.detailPanelProgress
 
         // --- Left: wallpaper grid ---
         W.CupertinoPane {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Math.max(0, parent.width
+                            - wallpaperSplitView.detailWidth
+                            - wallpaperSplitView.detailGap)
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
             backgroundColor: W.Global.cupertinoCard
@@ -1052,17 +1219,65 @@ W.CupertinoPage {
                 MD.VerticalGridView {
                     id: m_grid_view
 
-                    anchors.fill: parent
-                    clip: true
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    // Lay out at the destination width immediately; the pane
+                    // above is the animated clip. If GridView itself follows
+                    // the pane width, Qt keeps the old physical column count
+                    // until a threshold is crossed and then rewraps a row in
+                    // one frame near the end of the transition.
+                    width: _targetViewportWidth
+                    clip: false
                     focus: true
                     focusPolicy: Qt.StrongFocus
                     keyNavigationEnabled: true
                     keyNavigationWraps: true
                     currentIndex: -1
                     highlightRangeMode: GridView.NoHighlightRange
+                    // Qcm's shared GridView enables synchronousDrag for a
+                    // direct, touch-first feel.  A pixel-delta touchpad then
+                    // applies its drag threshold as one initial jump.  Keep
+                    // this dense desktop grid on Qt's normal path so its
+                    // content position advances continuously instead.
+                    synchronousDrag: false
+                    // Preserve fractional contentY while scrolling.  Integer
+                    // snapping makes low-speed motion visibly step on a
+                    // high-refresh display; false is Qt's animation-quality
+                    // default and is stated explicitly to protect it from
+                    // shared-style changes.
+                    pixelAligned: false
+                    // Qcm enables delegate reuse by default. During a topology
+                    // FLIP that can rebind a prepared card object to another
+                    // model index between capture and playback, producing
+                    // crossed identities and white holes. Keep stable delegate
+                    // identity only for this short transition.
+                    reuseItems: !(columnReflowActive
+                                  || detailPanelAnimation.running)
+
+                    // Pixel-delta touchpads stay on Flickable's native path;
+                    // discrete wheel steps use the frame-synchronized helper
+                    // below so motion follows the scene graph refresh clock.
                     // Keep one decoded row ready without activating a large
                     // ring of off-screen animated previews.
-                    cacheBuffer: Math.max(96, Math.ceil(cellHeight * 1.25))
+                    cacheBuffer: columnReflowActive || detailPanelAnimation.running
+                                 ? Math.max(height + cellHeight,
+                                            Math.ceil(cellHeight * 1.25))
+                                 : Math.max(96, Math.ceil(cellHeight * 1.25))
+                    // A short settle period prevents a whole visible row of
+                    // GIFs being constructed on the exact frame a flick ends.
+                    // The static posters stay in place during this interval.
+                    property bool previewAnimationsSettled: true
+                    onContentYChanged: {
+                        if (!moving && !flicking)
+                            previewBoundarySettleTimer.restart();
+                    }
+                    onMovementStarted: {
+                        wallpaperDesktopWheel.cancel();
+                        previewAnimationsSettled = false;
+                        previewAnimationSettleTimer.stop();
+                    }
+                    onMovementEnded: previewAnimationSettleTimer.restart()
                     displayMarginBeginning: 0
                     displayMarginEnd: 0
                     topMargin: wallpaperTopBar.height + 8
@@ -1072,36 +1287,241 @@ W.CupertinoPage {
                     leftMargin: 8
                     rightMargin: 8
 
+                    W.DesktopWheelScroll {
+                        id: wallpaperDesktopWheel
+
+                        flickable: m_grid_view
+                        onScrollingChanged: {
+                            if (scrolling) {
+                                m_grid_view.previewAnimationsSettled = false;
+                                previewAnimationSettleTimer.stop();
+                            } else {
+                                previewAnimationSettleTimer.restart();
+                            }
+                        }
+                    }
+
                     // The grid flows under the compact glass navigation, but
                     // its scroll bar stops at the mask's upper edge so the
                     // handle stays reachable at the end of the list.
                     T.ScrollBar.vertical: MD.ScrollBar {
+                        id: wallpaperScrollBar
+                        active: wallpaperDesktopWheel.scrolling
+                                || m_grid_view.moving || pressed
+
+                        // An attached ScrollBar already derives its position
+                        // and size from the Flickable. Anchoring it back to
+                        // that same Flickable creates a vertical geometry
+                        // cycle in Qt 6. Reparent only the visual overlay and
+                        // give it independent geometry so it cannot take the
+                        // grid out of layout while still tracking the
+                        // attached control's size/position values.
                         parent: wallpaperGridArea
-                        anchors.top: m_grid_view.top
-                        anchors.right: m_grid_view.right
-                        anchors.bottom: m_grid_view.bottom
-                        anchors.topMargin: wallpaperTopBar.height + 8
-                        anchors.bottomMargin: Math.max(W.Global.compactNavigationInset,
-                                                       root.selectionActionSheetActive
-                                                       ? root.selectionSheetReserve : 0)
-                        z: 19
+                        width: implicitWidth
+                        x: Math.max(0, wallpaperGridArea.width - width)
+                        y: wallpaperTopBar.height + 8
+                        height: Math.max(0,
+                                         wallpaperGridArea.height - y
+                                         - Math.max(W.Global.compactNavigationInset,
+                                                    root.selectionActionSheetActive
+                                                    ? root.selectionSheetReserve : 0))
+                        z: 21
+                        onPressedChanged: {
+                            if (pressed) {
+                                // ScrollBar owns contentY while pressed. Drop
+                                // any in-flight wheel destination immediately
+                                // so it cannot pull the view back on release.
+                                wallpaperDesktopWheel.cancel();
+                                m_grid_view.previewAnimationsSettled = false;
+                                previewAnimationSettleTimer.stop();
+                            } else if (!m_grid_view.moving && !m_grid_view.flicking) {
+                                previewAnimationSettleTimer.restart();
+                            }
+                        }
                     }
 
-                    visible: m_grid_view.count > 0
+                    // Do not expose delegates while the asynchronous page is
+                    // still receiving its first real width.  Otherwise the
+                    // initial one-column 932 px cards become visible and then
+                    // animate down to the final five-column size.
+                    visible: m_grid_view.count > 0 && _initialLayoutReady
 
-                    readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
-                    readonly property int _cols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
+                    // During a detail transition the pane's clip width moves,
+                    // while the grid lays out directly at the destination
+                    // width. This gives the card FLIP one stable destination
+                    // rather than changing its topology on every panel frame.
+                    readonly property real _targetViewportWidth: Math.max(
+                        0,
+                        wallpaperSplitView.width
+                        - (root.detailGridLayoutOpen ? 292 : 0))
+                    readonly property real _availableWidth: Math.max(
+                        0, _targetViewportWidth - leftMargin - rightMargin)
+                    readonly property int _calculatedCols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
+                    // Keep the current column topology while configure events
+                    // are streaming in. Otherwise crossing an integer column
+                    // boundary makes a shrinking window grow every card in a
+                    // single frame (for example 160.5 -> 191.8 px at 6 -> 5).
+                    // Cell geometry still follows the viewport immediately,
+                    // so this does not leave the stale-width white strip that
+                    // a Behavior on cellWidth produced.
+                    property int _cols: 1
+                    property bool _initialLayoutReady: false
+                    property bool _columnLatchReady: false
+                    property bool viewportResizeActive: false
+                    property bool columnReflowActive: false
                     readonly property real _stretchedItemWidth: _availableWidth / _cols
                     readonly property bool _fillCell: wallpaperTweakState.layoutMode === wallpaperTweakState.layoutFillCell
-                    readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(wallpaperTweakState.itemSize, _stretchedItemWidth)
-                    readonly property real _displayItemHeight: _displayItemWidth / Math.max(wallpaperTweakState.itemAspectRatio, 0.1)
+                    readonly property real _displayItemWidth: _fillCell
+                                                               ? _stretchedItemWidth
+                                                               : Math.min(wallpaperTweakState.itemSize,
+                                                                          _stretchedItemWidth)
+                    readonly property real _displayItemHeight: _displayItemWidth
+                                                               / Math.max(wallpaperTweakState.itemAspectRatio,
+                                                                          0.1)
                     cellWidth: _stretchedItemWidth
-                    cellHeight: _fillCell ? _displayItemHeight : wallpaperTweakState.itemHeight
+                    cellHeight: _fillCell
+                                ? _displayItemHeight
+                                : wallpaperTweakState.itemHeight
+
+                    function scheduleColumnSettle() {
+                        if (!_columnLatchReady)
+                            return;
+                        viewportResizeActive = true;
+                        columnSettleTimer.restart();
+                    }
+
+                    function forEachPreparedDelegate(callback) {
+                        const children = contentItem?.children || [];
+                        for (let i = 0; i < children.length; ++i) {
+                            const delegate = children[i];
+                            if (delegate && delegate.objectName === "wallpaperCard")
+                                callback(delegate);
+                        }
+                    }
+
+                    function prepareVisibleReflow() {
+                        forEachPreparedDelegate(function (delegate) {
+                            delegate.prepareReflow();
+                        });
+                    }
+
+                    function startVisibleReflow() {
+                        forEachPreparedDelegate(function (delegate) {
+                            delegate.startPreparedReflow();
+                        });
+                    }
+
+                    function beginDetailLayout(open) {
+                        if (root.detailGridLayoutOpen === open)
+                            return;
+
+                        // Capture the delegates' current scene positions and
+                        // rendered sizes before switching to the known target.
+                        // WallpaperCard performs one FLIP move/resize over the
+                        // same duration as the panel reveal.
+                        columnSettleTimer.stop();
+                        detailContentYAnimation.stop();
+                        viewportResizeActive = false;
+                        if (!_initialLayoutReady) {
+                            root.detailGridLayoutOpen = open;
+                            _cols = _calculatedCols;
+                            return;
+                        }
+                        const anchoredClose = !open
+                                              && root.detailCloseAnchorActive
+                                              && currentIndex >= 0;
+                        const originalContentY = contentY;
+                        columnReflowActive = false;
+                        columnReflowActive = true;
+                        prepareVisibleReflow();
+                        root.detailGridLayoutOpen = open;
+                        _cols = _calculatedCols;
+                        if (currentIndex >= 0) {
+                            wallpaperDesktopWheel.cancel();
+                            forceLayout();
+                            positionViewAtIndex(currentIndex, GridView.Center);
+                            const anchored = contentY;
+                            contentY = originalContentY;
+                            if (anchoredClose) {
+                                root.detailRestoreFocusTargetY = anchored;
+                                root.detailRestoreFocusScrollAccepted = true;
+                                root.restoreDetailFocusPending = false;
+                            }
+                            root.smoothDetailFocusPending = false;
+                            detailContentYAnimation.from = originalContentY;
+                            detailContentYAnimation.to = anchored;
+                        }
+                        forceLayout();
+                        startVisibleReflow();
+                        if (currentIndex >= 0
+                                && Math.abs(detailContentYAnimation.to
+                                            - detailContentYAnimation.from) > 0.01)
+                            detailContentYAnimation.restart();
+                        columnReflowTimer.restart();
+                    }
+
+                    function applySettledColumns() {
+                        viewportResizeActive = false;
+                        const nextColumns = _calculatedCols;
+                        if (nextColumns === _cols)
+                            return;
+
+                        // Arm delegates before changing the GridView topology.
+                        // Their visual geometry then moves once, after the
+                        // high-frequency resize stream has stopped.
+                        columnReflowActive = true;
+                        prepareVisibleReflow();
+                        _cols = nextColumns;
+                        forceLayout();
+                        startVisibleReflow();
+                        columnReflowTimer.restart();
+                        if (root.detailLayoutFocusActive)
+                            root.scheduleCurrentWallpaperFocus();
+                    }
+
+                    // Drive the settle guard from every effective width
+                    // sample, not only from the rare sample that crosses a
+                    // column threshold.  A one-edge drag can remain inside
+                    // the new column band for many frames; restarting here
+                    // prevents an early reflow while that drag is still live.
+                    on_AvailableWidthChanged: {
+                        if (!_columnLatchReady) {
+                            // Initial layout is not a user-visible reflow.
+                            // Track it directly behind the hidden grid and
+                            // arm normal resize latching only after it settles.
+                            _cols = _calculatedCols;
+                            initialColumnSettleTimer.restart();
+                        } else {
+                            scheduleColumnSettle();
+                        }
+                    }
+                    Component.onCompleted: {
+                        _cols = _calculatedCols;
+                        initialColumnSettleTimer.restart();
+                    }
+                    onWidthChanged: {
+                        if (root.detailLayoutFocusActive)
+                            root.scheduleCurrentWallpaperFocus();
+                    }
+                    onCellWidthChanged: {
+                        if (root.detailLayoutFocusActive)
+                            root.scheduleCurrentWallpaperFocus();
+                    }
+                    onCellHeightChanged: {
+                        if (root.detailLayoutFocusActive)
+                            root.scheduleCurrentWallpaperFocus();
+                    }
 
                     model: wallpaperQuery.data
 
                     delegate: WallpaperCard {
                         selected: model.selected ?? false
+                        current: index === m_grid_view.currentIndex
+                        pageActive: root.previewPageActive
+                        animationSettled: m_grid_view.previewAnimationsSettled
+                        reflowTransitionActive: m_grid_view.columnReflowActive
+                        reflowReverse: root.detailCloseAnchorActive
+                                       && !root.detailPanelOpen
                         itemWidth: m_grid_view._displayItemWidth
                         itemHeight: m_grid_view._displayItemHeight
                         onClicked: modifiers => root.handleWallpaperClick(index, modifiers)
@@ -1115,20 +1535,120 @@ W.CupertinoPage {
                         }
                     }
 
-                    highlightFollowsCurrentItem: true
-                    highlight: Component {
-                        Item {
-                            visible: m_grid_view.currentItem !== null
-                            z: 2
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                color: "transparent"
-                                border.color: W.Global.effectiveAccentColor
-                                border.width: 2
-                                radius: 12
-                            }
-                        }
+                    // Selection is painted by each card and cross-fades
+                    // between delegates. GridView's separate highlight item
+                    // can be recreated at the destination, which looks like
+                    // an instantaneous focus teleport.
+                    highlightFollowsCurrentItem: false
+                    highlight: null
+                }
+
+                NumberAnimation {
+                    id: detailContentYAnimation
+
+                    target: m_grid_view
+                    property: "contentY"
+                    duration: 220
+                    easing.type: root.detailPanelOpen ? Easing.OutCubic
+                                                      : Easing.InCubic
+                }
+
+                Qml.Timer {
+                    id: previewAnimationSettleTimer
+
+                    interval: 140
+                    repeat: false
+                    onTriggered: {
+                        if (!m_grid_view.moving && !m_grid_view.flicking)
+                            m_grid_view.previewAnimationsSettled = true;
+                    }
+                }
+
+                // A wheel animation can finish exactly at Flickable's extent
+                // without producing another movement-ended edge. Recover the
+                // thumbnail decoder state after contentY itself has stayed
+                // quiet, independently of the scroll helper's boundary state.
+                Qml.Timer {
+                    id: previewBoundarySettleTimer
+
+                    interval: 180
+                    repeat: false
+                    onTriggered: {
+                        if (!m_grid_view.moving && !m_grid_view.flicking)
+                            m_grid_view.previewAnimationsSettled = true;
+                    }
+                }
+
+                Qml.Timer {
+                    id: initialColumnSettleTimer
+
+                    interval: 72
+                    repeat: false
+                    onTriggered: {
+                        // Re-read after the final startup layout pass, then
+                        // reveal already-correct delegates without a Behavior.
+                        m_grid_view._cols = m_grid_view._calculatedCols;
+                        m_grid_view.forceLayout();
+                        m_grid_view._columnLatchReady = true;
+                        m_grid_view._initialLayoutReady = true;
+                    }
+                }
+
+                Qml.Timer {
+                    id: columnSettleTimer
+
+                    // A little over eleven 165 Hz frames: long enough to
+                    // identify an active border drag, short enough for the
+                    // final responsive reflow to feel immediate.
+                    interval: 72
+                    repeat: false
+                    onTriggered: m_grid_view.applySettledColumns()
+                }
+
+                Qml.Timer {
+                    id: columnReflowTimer
+
+                    interval: 220
+                    repeat: false
+                    onTriggered: m_grid_view.columnReflowActive = false
+                }
+
+                Qml.Timer {
+                    id: detailFocusTimer
+
+                    // Coalesce panel progress, GridView width and animated
+                    // cell-size changes into one layout/focus update per
+                    // event-loop turn.
+                    interval: 0
+                    repeat: false
+                    onTriggered: root.focusCurrentWallpaper()
+                }
+
+                Qml.Timer {
+                    id: detailRestoreFocusTimer
+
+                    // Let GridView publish delegate coordinates for the
+                    // expanded column topology before deriving a smooth
+                    // scroll target. This is short enough to be imperceptible
+                    // at 60 Hz and spans several frames at 165 Hz.
+                    interval: 24
+                    repeat: false
+                    onTriggered: {
+                        if (!root.restoreDetailFocusPending || !m_grid_view
+                                || m_grid_view.currentIndex < 0
+                                || !m_grid_view.currentItem)
+                            return;
+                        m_grid_view.forceLayout();
+                        const item = m_grid_view.currentItem;
+                        const usableCenter = (m_grid_view.topMargin
+                                              + m_grid_view.height
+                                              - m_grid_view.bottomMargin) / 2;
+                        const target = item.y + item.height / 2 - usableCenter;
+                        root.smoothDetailFocusPending = false;
+                        root.restoreDetailFocusPending = false;
+                        root.detailRestoreFocusTargetY = target;
+                        root.detailRestoreFocusScrollAccepted =
+                            wallpaperDesktopWheel.scrollTo(target);
                     }
                 }
 
@@ -1304,21 +1824,38 @@ W.CupertinoPage {
             }
 
         // --- Right: wallpaper detail panel ---
-        W.CupertinoPane {
-            Layout.preferredWidth: root.selectedWallpaper !== null && !root.selectionActive ? 280 : 0
-            Layout.fillHeight: true
-            Layout.maximumWidth: 280
-            visible: root.selectedWallpaper !== null && !root.selectionActive
-            radius: root.MD.MProp.page.backgroundRadius
-            padding: 0
-            backgroundColor: W.Global.cupertinoCard
-            showBackground: true
+        Item {
+            id: detailPanelContainer
 
-            contentItem: WallpaperDetailPanel {
-                wallpaperId: root.selectedWallpaper?.id_proto ?? ""
-                fallbackWallpaper: root.selectedWallpaper
-                showApply: true
-                onBack: root.selectedWallpaper = null
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: wallpaperSplitView.detailWidth
+            visible: root.detailPanelOpen || root.detailPanelProgress > 0.001
+            clip: true
+
+            W.CupertinoPane {
+                width: 280
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                radius: root.MD.MProp.page.backgroundRadius
+                padding: 0
+                backgroundColor: W.Global.cupertinoCard
+                showBackground: true
+                opacity: Math.min(1, root.detailPanelProgress * 1.35)
+                enabled: root.detailPanelProgress > 0.98
+
+                transform: Translate {
+                    x: (1 - root.detailPanelProgress) * 18
+                }
+
+                contentItem: WallpaperDetailPanel {
+                    wallpaperId: root.detailWallpaper?.id_proto ?? ""
+                    fallbackWallpaper: root.detailWallpaper
+                    showApply: true
+                    onBack: root.selectedWallpaper = null
+                }
             }
         }
     }

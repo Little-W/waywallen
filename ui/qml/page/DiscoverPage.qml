@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
+import QtCore
 import Qcm.Material as MD
 import waywallen.ui as W
 
@@ -19,7 +20,77 @@ W.CupertinoPage {
     rightPadding: 0
 
     property bool detailOpen: false
-    readonly property var detailRow: detailOpen ? detailStore.item : null
+    // Keep the selected row alive until the close animation completes. This
+    // mirrors WallpaperPage and prevents the panel content disappearing
+    // before its surface has slid out.
+    readonly property var detailRow: detailStore.item
+    property bool detailGridLayoutOpen: false
+    property bool smoothDetailFocusPending: false
+    property bool detailCloseAnchorActive: false
+    property real detailPanelProgress: detailOpen ? 1.0 : 0.0
+    readonly property bool detailLayoutFocusActive: detailRow !== null
+                                                    && (detailPanelProgress > 0.001
+                                                        || detailPanelAnimation.running)
+
+    Behavior on detailPanelProgress {
+        NumberAnimation {
+            id: detailPanelAnimation
+
+            duration: 220
+            easing.type: root.detailOpen ? Easing.OutCubic : Easing.InCubic
+            onRunningChanged: {
+                if (running) {
+                    W.Global.contentGeometryAnimating = true;
+                    m_grid.previewAnimationsSettled = false;
+                } else {
+                    W.Global.contentGeometryAnimating = false;
+                    discoverPreviewAnimationSettleTimer.restart();
+                    if (root.detailPanelProgress <= 0.001 && !root.detailOpen) {
+                        root.detailCloseAnchorActive = false;
+                        detailsQuery.itemId = "";
+                        detailStore.item = null;
+                    }
+                    root.scheduleCurrentItemFocus();
+                }
+            }
+        }
+    }
+
+    onDetailOpenChanged: {
+        detailCloseAnchorActive = !detailOpen && m_grid
+                                  && m_grid.currentIndex >= 0;
+        if (m_grid)
+            m_grid.beginDetailLayout(detailOpen);
+        else
+            detailGridLayoutOpen = detailOpen;
+        root.scheduleCurrentItemFocus();
+    }
+
+    function scheduleCurrentItemFocus() {
+        if (!m_grid || m_grid.currentIndex < 0)
+            return;
+        if (root.detailCloseAnchorActive)
+            return;
+        if (!detailPanelAnimation.running)
+            discoverDetailFocusTimer.restart();
+    }
+
+    function focusCurrentItem() {
+        if (!m_grid || m_grid.currentIndex < 0 || !root.detailLayoutFocusActive)
+            return;
+        m_grid.forceLayout();
+        if (root.smoothDetailFocusPending && m_grid.currentItem) {
+            root.smoothDetailFocusPending = false;
+            const item = m_grid.currentItem;
+            const usableCenter = (m_grid.topMargin + m_grid.height
+                                  - m_grid.bottomMargin) / 2;
+            discoverDesktopWheel.scrollTo(item.y + item.height / 2
+                                          - usableCenter);
+            return;
+        }
+        root.smoothDetailFocusPending = false;
+        m_grid.positionViewAtIndex(m_grid.currentIndex, GridView.Center);
+    }
 
     property string sourceId: ""
     property var sortOptions: []
@@ -28,6 +99,13 @@ W.CupertinoPage {
     property var infoPresentation: null
     property var managePresentation: null
     readonly property var discoverTweakState: discoverTweakStateLoader.item
+    readonly property bool previewPageActive: T.StackView.status === T.StackView.Active
+
+    readonly property Settings discoverLayoutInheritanceSettings: Settings {
+        category: "DiscoverLayoutInheritance"
+        property string migratedSourcesJson: "[]"
+        property string customizedSourcesJson: "[]"
+    }
 
     Loader {
         id: discoverTweakStateLoader
@@ -38,6 +116,88 @@ W.CupertinoPage {
             W.TweakState {
                 settingsCategory: discoverTweakStateLoader.settingsCategory
             }
+        }
+
+        onLoaded: root.applyDiscoverLayoutBaseline(root.sourceId)
+    }
+
+    Connections {
+        target: root.discoverTweakState
+        function onUserChanged() {
+            root.markDiscoverLayoutCustomized(root.sourceId);
+        }
+    }
+
+    Connections {
+        target: W.Global
+        function onWallpaperGridTweakReadyChanged() {
+            root.applyDiscoverLayoutBaseline(root.sourceId);
+        }
+        function onWallpaperGridItemSizeChanged() {
+            root.applyDiscoverLayoutBaseline(root.sourceId);
+        }
+        function onWallpaperGridItemAspectRatioChanged() {
+            root.applyDiscoverLayoutBaseline(root.sourceId);
+        }
+        function onWallpaperGridLayoutModeChanged() {
+            root.applyDiscoverLayoutBaseline(root.sourceId);
+        }
+    }
+
+    function layoutSourceList(json) {
+        try {
+            const value = JSON.parse(json);
+            return Array.isArray(value) ? value.map(String) : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function layoutSourceRecorded(json, id) {
+        return layoutSourceList(json).indexOf(String(id)) >= 0;
+    }
+
+    function recordLayoutSource(settingName, id) {
+        const source = String(id ?? "");
+        if (source.length === 0)
+            return;
+        const current = root.discoverLayoutInheritanceSettings[settingName];
+        const values = layoutSourceList(current);
+        if (values.indexOf(source) >= 0)
+            return;
+        values.push(source);
+        root.discoverLayoutInheritanceSettings[settingName] = JSON.stringify(values);
+    }
+
+    function markDiscoverLayoutCustomized(id) {
+        recordLayoutSource("migratedSourcesJson", id);
+        recordLayoutSource("customizedSourcesJson", id);
+    }
+
+    function applyDiscoverLayoutBaseline(id) {
+        const source = String(id ?? "");
+        const tweak = root.discoverTweakState;
+        if (source.length === 0 || !tweak || !W.Global.wallpaperGridTweakReady)
+            return;
+
+        const state = root.discoverLayoutInheritanceSettings;
+        let customized = layoutSourceRecorded(state.customizedSourcesJson,
+                                               source);
+        if (!layoutSourceRecorded(state.migratedSourcesJson, source)) {
+            // Before this marker existed, 160/1/fill was the normalized
+            // Discover default. Values distinguishable from it are retained as
+            // legacy user choices; only the old default adopts Wallpapers.
+            customized = tweak.itemSize !== 160
+                         || Math.abs(tweak.itemAspectRatio - 1) >= 0.001
+                         || tweak.layoutMode !== tweak.layoutFillCell;
+            recordLayoutSource("migratedSourcesJson", source);
+            if (customized)
+                recordLayoutSource("customizedSourcesJson", source);
+        }
+        if (!customized) {
+            tweak.applyLayout(W.Global.wallpaperGridItemSize,
+                              W.Global.wallpaperGridItemAspectRatio,
+                              W.Global.wallpaperGridLayoutMode);
         }
     }
 
@@ -157,9 +317,7 @@ W.CupertinoPage {
         detailsQuery.sourceId = id;
         searchQuery.sortKey = sortOptions.length > 0 ? sortOptions[sortIndex].key : "";
         if (sourceChanged || !canBrowse) {
-            detailOpen = false;
-            detailsQuery.itemId = "";
-            m_grid.currentIndex = -1;
+            root.closeDetail();
         }
     }
 
@@ -171,18 +329,24 @@ W.CupertinoPage {
     }
 
     function selectItem(index) {
+        const detailWasOpen = root.detailOpen;
+        m_grid.currentIndex = index;
+        root.smoothDetailFocusPending = detailWasOpen;
         detailStore.item = searchQuery.model.item(index);
         detailOpen = true;
         detailsQuery.sourceId = detailRow.sourceId;
         detailsQuery.itemId = detailRow.itemId;
         if (root.sourceCapability(detailRow.sourceId) === 2)
             refreshDetailSubscription();
+        root.scheduleCurrentItemFocus();
     }
 
     function closeDetail() {
         detailOpen = false;
-        detailsQuery.itemId = "";
-        m_grid.currentIndex = -1;
+        if (!detailPanelAnimation.running && detailPanelProgress <= 0.001) {
+            detailsQuery.itemId = "";
+            detailStore.item = null;
+        }
     }
 
     function openInfo() {
@@ -428,13 +592,24 @@ W.CupertinoPage {
         if (W.Notify.daemonPhase === W.Notify.DaemonPhase.Ready)
             reloadAll();
     }
+    Component.onDestruction: W.Global.contentGeometryAnimating = false
 
-    contentItem: RowLayout {
-        spacing: 12
+    contentItem: Item {
+        id: discoverSplitView
+
+        // Use the same direct-geometry master/detail reveal as WallpaperPage.
+        // Animating RowLayout preferred sizes triggers multiple layout passes
+        // per frame and makes the grid change size before its topology does.
+        readonly property real detailWidth: 280 * root.detailPanelProgress
+        readonly property real detailGap: 12 * root.detailPanelProgress
 
         W.CupertinoPane {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Math.max(0, parent.width
+                            - discoverSplitView.detailWidth
+                            - discoverSplitView.detailGap)
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
             backgroundColor: W.Global.cupertinoCard
@@ -474,7 +649,7 @@ W.CupertinoPage {
 
                     RowLayout {
                         anchors.left: parent.left
-                        anchors.right: parent.right
+                        width: _targetViewportWidth
                         anchors.top: parent.top
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
@@ -566,35 +741,109 @@ W.CupertinoPage {
 
                     MD.VerticalGridView {
                         id: m_grid
-                        anchors.fill: parent
-                        clip: true
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.right: parent.right
+                        // discoverGridViewport performs the animated clipping;
+                        // keep GridView's own layout viewport at the final
+                        // master/detail width throughout the transition.
+                        clip: false
+                        // Match the wallpaper library's native touchpad path.
+                        // Qcm's touch-oriented synchronous drag turns the first
+                        // pixel-delta sample into a jump.
+                        synchronousDrag: false
+                        pixelAligned: false
+                        reuseItems: !(columnReflowActive
+                                      || detailPanelAnimation.running)
                         // Preload just over one row.  Large display margins
                         // keep GIF delegates alive even though users cannot
                         // see them during a scroll.
-                        cacheBuffer: Math.max(96, Math.ceil(cellHeight * 1.25))
+                        cacheBuffer: columnReflowActive
+                                     || detailPanelAnimation.running
+                                     ? Math.max(height + cellHeight,
+                                                Math.ceil(cellHeight * 1.25))
+                                     : Math.max(96,
+                                                Math.ceil(cellHeight * 1.25))
                         displayMarginBeginning: 0
                         displayMarginEnd: 0
                         currentIndex: -1
+                        property bool previewAnimationsSettled: true
+                        onContentYChanged: {
+                            if (!moving && !flicking)
+                                discoverBoundarySettleTimer.restart();
+                        }
+                        onMovementStarted: {
+                            discoverDesktopWheel.cancel();
+                            previewAnimationsSettled = false;
+                            discoverPreviewAnimationSettleTimer.stop();
+                        }
+                        onMovementEnded: discoverPreviewAnimationSettleTimer.restart()
                         topMargin: discoverTopBar.height + 8
                         bottomMargin: Math.max(8, W.Global.compactNavigationInset)
                         leftMargin: 8
                         rightMargin: 8
 
+                        W.DesktopWheelScroll {
+                            id: discoverDesktopWheel
+
+                            flickable: m_grid
+                            onScrollingChanged: {
+                                if (scrolling) {
+                                    m_grid.previewAnimationsSettled = false;
+                                    discoverPreviewAnimationSettleTimer.stop();
+                                } else {
+                                    discoverPreviewAnimationSettleTimer.restart();
+                                }
+                            }
+                        }
+
                         // Keep the interactive scroll bar out of the compact
                         // navigation overlay while cards continue below the
                         // live frosted material.
                         T.ScrollBar.vertical: MD.ScrollBar {
+                            id: discoverScrollBar
+                            active: discoverDesktopWheel.scrolling
+                                    || m_grid.moving || pressed
                             parent: discoverGridViewport
-                            anchors.top: m_grid.top
-                            anchors.right: m_grid.right
-                            anchors.bottom: m_grid.bottom
-                            anchors.topMargin: discoverTopBar.height + 8
-                            anchors.bottomMargin: W.Global.compactNavigationInset
-                            z: 19
+                            width: implicitWidth
+                            x: Math.max(0, discoverGridViewport.width - width)
+                            y: discoverTopBar.height + 8
+                            height: Math.max(0,
+                                             discoverGridViewport.height - y
+                                             - W.Global.compactNavigationInset)
+                            z: 21
+                            onPressedChanged: {
+                                if (pressed) {
+                                    discoverDesktopWheel.cancel();
+                                    m_grid.previewAnimationsSettled = false;
+                                    discoverPreviewAnimationSettleTimer.stop();
+                                } else if (!m_grid.moving && !m_grid.flicking) {
+                                    discoverPreviewAnimationSettleTimer.restart();
+                                }
+                            }
                         }
 
-                        readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
-                        readonly property int _cols: Math.max(1, Math.floor(_availableWidth / root.discoverTweakState.itemSize))
+                        // Match WallpaperPage's explicit master/detail layout:
+                        // choose the destination topology once, while the pane
+                        // merely clips the already-animating card surfaces.
+                        visible: m_grid.count > 0 && _initialLayoutReady
+                        readonly property real _targetViewportWidth: Math.max(
+                            0,
+                            discoverSplitView.width
+                            - (root.detailGridLayoutOpen ? 292 : 0))
+                        readonly property real _availableWidth: Math.max(
+                            0,
+                            _targetViewportWidth - leftMargin - rightMargin)
+                        readonly property int _calculatedCols: Math.max(
+                            1,
+                            Math.floor(_availableWidth
+                                       / root.discoverTweakState.itemSize))
+                        property int _cols: 1
+                        property bool _initialLayoutReady: false
+                        property bool _columnLatchReady: false
+                        property bool viewportResizeActive: false
+                        property bool columnReflowActive: false
                         readonly property real _stretchedItemWidth: _availableWidth / _cols
                         readonly property bool _fillCell: root.discoverTweakState.layoutMode === root.discoverTweakState.layoutFillCell
                         readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(root.discoverTweakState.itemSize, _stretchedItemWidth)
@@ -602,33 +851,207 @@ W.CupertinoPage {
                         cellWidth: _stretchedItemWidth
                         cellHeight: _fillCell ? _displayItemHeight : root.discoverTweakState.itemHeight
 
+                        function scheduleColumnSettle() {
+                            if (!_columnLatchReady)
+                                return;
+                            viewportResizeActive = true;
+                            discoverColumnSettleTimer.restart();
+                        }
+
+                        function forEachPreparedDelegate(callback) {
+                            const children = contentItem?.children || [];
+                            for (let i = 0; i < children.length; ++i) {
+                                const delegate = children[i];
+                                if (delegate
+                                        && delegate.objectName
+                                           === "discoverWallpaperCard")
+                                    callback(delegate);
+                            }
+                        }
+
+                        function prepareVisibleReflow() {
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.prepareReflow();
+                            });
+                        }
+
+                        function startVisibleReflow() {
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.startPreparedReflow();
+                            });
+                        }
+
+                        function beginDetailLayout(open) {
+                            if (root.detailGridLayoutOpen === open)
+                                return;
+
+                            discoverColumnSettleTimer.stop();
+                            discoverDetailContentYAnimation.stop();
+                            viewportResizeActive = false;
+                            if (!_initialLayoutReady) {
+                                root.detailGridLayoutOpen = open;
+                                _cols = _calculatedCols;
+                                return;
+                            }
+                            const originalContentY = contentY;
+                            columnReflowActive = false;
+                            columnReflowActive = true;
+                            prepareVisibleReflow();
+                            root.detailGridLayoutOpen = open;
+                            _cols = _calculatedCols;
+                            if (currentIndex >= 0) {
+                                discoverDesktopWheel.cancel();
+                                forceLayout();
+                                positionViewAtIndex(currentIndex,
+                                                    GridView.Center);
+                                const targetContentY = contentY;
+                                contentY = originalContentY;
+                                root.smoothDetailFocusPending = false;
+                                discoverDetailContentYAnimation.from =
+                                    originalContentY;
+                                discoverDetailContentYAnimation.to =
+                                    targetContentY;
+                            }
+                            forceLayout();
+                            startVisibleReflow();
+                            if (currentIndex >= 0
+                                    && Math.abs(
+                                        discoverDetailContentYAnimation.to
+                                        - discoverDetailContentYAnimation.from)
+                                       > 0.01)
+                                discoverDetailContentYAnimation.restart();
+                            discoverColumnReflowTimer.restart();
+                        }
+
+                        function applySettledColumns() {
+                            viewportResizeActive = false;
+                            const nextColumns = _calculatedCols;
+                            if (nextColumns === _cols)
+                                return;
+
+                            columnReflowActive = true;
+                            prepareVisibleReflow();
+                            _cols = nextColumns;
+                            forceLayout();
+                            startVisibleReflow();
+                            discoverColumnReflowTimer.restart();
+                            if (root.detailLayoutFocusActive)
+                                root.scheduleCurrentItemFocus();
+                        }
+
+                        on_AvailableWidthChanged: {
+                            if (!_columnLatchReady) {
+                                _cols = _calculatedCols;
+                                discoverInitialColumnSettleTimer.restart();
+                            } else {
+                                scheduleColumnSettle();
+                            }
+                        }
+                        Component.onCompleted: {
+                            _cols = _calculatedCols;
+                            discoverInitialColumnSettleTimer.restart();
+                        }
+                        onWidthChanged: {
+                            if (root.detailLayoutFocusActive)
+                                root.scheduleCurrentItemFocus();
+                        }
+                        onCellWidthChanged: {
+                            if (root.detailLayoutFocusActive)
+                                root.scheduleCurrentItemFocus();
+                        }
+                        onCellHeightChanged: {
+                            if (root.detailLayoutFocusActive)
+                                root.scheduleCurrentItemFocus();
+                        }
+
                         model: searchQuery.model
 
                         delegate: RemoteCard {
                             remoteCapability: root.sourceCapability(root.sourceId)
+                            current: index === m_grid.currentIndex
+                            pageActive: root.previewPageActive
+                            animationSettled: m_grid.previewAnimationsSettled
+                            reflowTransitionActive: m_grid.columnReflowActive
+                            reflowReverse: root.detailCloseAnchorActive
+                                           && !root.detailOpen
                             itemWidth: m_grid._displayItemWidth
                             itemHeight: m_grid._displayItemHeight
                             onClicked: {
-                                m_grid.currentIndex = index;
                                 root.selectItem(index);
                             }
                         }
 
-                        highlightFollowsCurrentItem: true
-                        highlight: Component {
-                            Item {
-                                visible: m_grid.currentItem !== null
-                                z: 2
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    color: "transparent"
-                                    border.color: W.Global.effectiveAccentColor
-                                    border.width: 2
-                                    radius: 12
-                                }
-                            }
+                        highlightFollowsCurrentItem: false
+                        highlight: null
+                    }
+
+                    NumberAnimation {
+                        id: discoverDetailContentYAnimation
+
+                        target: m_grid
+                        property: "contentY"
+                        duration: 220
+                        easing.type: root.detailOpen ? Easing.OutCubic
+                                                     : Easing.InCubic
+                    }
+
+                    Timer {
+                        id: discoverPreviewAnimationSettleTimer
+
+                        interval: 140
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid.moving && !m_grid.flicking)
+                                m_grid.previewAnimationsSettled = true;
                         }
+                    }
+
+                    Timer {
+                        id: discoverBoundarySettleTimer
+
+                        interval: 180
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid.moving && !m_grid.flicking)
+                                m_grid.previewAnimationsSettled = true;
+                        }
+                    }
+
+                    Timer {
+                        id: discoverInitialColumnSettleTimer
+
+                        interval: 72
+                        repeat: false
+                        onTriggered: {
+                            m_grid._cols = m_grid._calculatedCols;
+                            m_grid.forceLayout();
+                            m_grid._columnLatchReady = true;
+                            m_grid._initialLayoutReady = true;
+                        }
+                    }
+
+                    Timer {
+                        id: discoverColumnSettleTimer
+
+                        interval: 72
+                        repeat: false
+                        onTriggered: m_grid.applySettledColumns()
+                    }
+
+                    Timer {
+                        id: discoverColumnReflowTimer
+
+                        interval: 220
+                        repeat: false
+                        onTriggered: m_grid.columnReflowActive = false
+                    }
+
+                    Timer {
+                        id: discoverDetailFocusTimer
+
+                        interval: 0
+                        repeat: false
+                        onTriggered: root.focusCurrentItem()
                     }
 
                     ColumnLayout {
@@ -710,37 +1133,54 @@ W.CupertinoPage {
             }
         }
 
-        W.CupertinoPane {
-            Layout.preferredWidth: root.detailRow !== null ? 280 : 0
-            Layout.maximumWidth: 280
-            Layout.fillHeight: true
-            visible: root.detailRow !== null
-            radius: root.MD.MProp.page.backgroundRadius
-            padding: 0
-            backgroundColor: W.Global.cupertinoCard
-            showBackground: true
+        Item {
+            id: discoverDetailPanelContainer
 
-            contentItem: RemoteDetailPanel {
-                item: root.detailRow
-                details: detailsQuery
-                remoteCapability: root.detailRow ? root.sourceCapability(root.detailRow.sourceId) : 0
-                remoteHint: root.detailRow ? root.sourceRemoteHint(root.detailRow.sourceId) : ""
-                downloadState: Number(root.detailRow?.acquisitionState ?? 0)
-                subscriptionState: Number(root.detailRow?.acquisitionState ?? 0)
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: discoverSplitView.detailWidth
+            visible: root.detailOpen || root.detailPanelProgress > 0.001
+            clip: true
 
-                onBack: root.closeDetail()
-                onShowInfo: root.openInfo()
-                onDownloadRequested: {
-                    if (!root.detailRow)
-                        return;
-                    dlQuery.start(root.detailRow.sourceId, root.detailRow.itemId);
+            W.CupertinoPane {
+                width: 280
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                radius: root.MD.MProp.page.backgroundRadius
+                padding: 0
+                backgroundColor: W.Global.cupertinoCard
+                showBackground: true
+                opacity: Math.min(1, root.detailPanelProgress * 1.35)
+                enabled: root.detailPanelProgress > 0.98
+
+                transform: Translate {
+                    x: (1 - root.detailPanelProgress) * 18
                 }
-                onRemoveRequested: {
-                    if (root.detailRow)
-                        dlQuery.remove(root.detailRow.sourceId, root.detailRow.itemId);
+
+                contentItem: RemoteDetailPanel {
+                    item: root.detailRow
+                    details: detailsQuery
+                    remoteCapability: root.detailRow ? root.sourceCapability(root.detailRow.sourceId) : 0
+                    remoteHint: root.detailRow ? root.sourceRemoteHint(root.detailRow.sourceId) : ""
+                    downloadState: Number(root.detailRow?.acquisitionState ?? 0)
+                    subscriptionState: Number(root.detailRow?.acquisitionState ?? 0)
+
+                    onBack: root.closeDetail()
+                    onShowInfo: root.openInfo()
+                    onDownloadRequested: {
+                        if (!root.detailRow)
+                            return;
+                        dlQuery.start(root.detailRow.sourceId, root.detailRow.itemId);
+                    }
+                    onRemoveRequested: {
+                        if (root.detailRow)
+                            dlQuery.remove(root.detailRow.sourceId, root.detailRow.itemId);
+                    }
+                    onSubscriptionRefreshRequested: root.refreshDetailSubscription()
+                    onSubscriptionChangeRequested: subscribed => root.setDetailSubscription(subscribed)
                 }
-                onSubscriptionRefreshRequested: root.refreshDetailSubscription()
-                onSubscriptionChangeRequested: subscribed => root.setDetailSubscription(subscribed)
             }
         }
     }

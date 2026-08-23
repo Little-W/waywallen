@@ -16,6 +16,8 @@ QtObject {
     property int layoutMode: layoutFillCell
     readonly property real itemHeight: itemSize / Math.max(itemAspectRatio, 0.1)
 
+    signal userChanged
+
     readonly property Settings settings: Settings {
         category: root.settingsCategory
         property alias itemSize: root.itemSize
@@ -24,22 +26,41 @@ QtObject {
     }
 
     Component.onCompleted: {
-        setItemSize(itemSize);
-        setItemAspectRatio(itemAspectRatio);
-        setLayoutMode(layoutMode);
+        applyLayout(itemSize, itemAspectRatio, layoutMode);
+    }
+
+    function normalizeItemSize(size) {
+        const stepped = Math.round(Number(size) / itemSizeStep) * itemSizeStep;
+        return Math.max(minimumItemSize, Math.min(maximumItemSize, stepped));
+    }
+
+    function normalizeItemAspectRatio(ratio) {
+        const next = Number(ratio);
+        return next > 0 ? next : 1;
+    }
+
+    function normalizeLayoutMode(mode) {
+        return mode === layoutFixed ? layoutFixed : layoutFillCell;
+    }
+
+    function applyLayout(size, ratio, mode) {
+        itemSize = normalizeItemSize(size);
+        itemAspectRatio = normalizeItemAspectRatio(ratio);
+        layoutMode = normalizeLayoutMode(mode);
     }
 
     function setItemSize(size) {
-        const stepped = Math.round(Number(size) / itemSizeStep) * itemSizeStep;
-        itemSize = Math.max(minimumItemSize, Math.min(maximumItemSize, stepped));
+        itemSize = normalizeItemSize(size);
+        userChanged();
     }
 
     function setItemAspectRatio(ratio) {
-        const next = Number(ratio);
-        itemAspectRatio = next > 0 ? next : 1;
+        itemAspectRatio = normalizeItemAspectRatio(ratio);
+        userChanged();
     }
 
     function setLayoutMode(mode) {
-        layoutMode = mode === layoutFixed ? layoutFixed : layoutFillCell;
+        layoutMode = normalizeLayoutMode(mode);
+        userChanged();
     }
 }
