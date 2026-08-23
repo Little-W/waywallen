@@ -1724,6 +1724,7 @@ W.CupertinoPage {
                         MD.ActionToolBar {
                             id: wallpaperActionToolBar
                             Layout.fillWidth: true
+                            Layout.preferredWidth: maximumContentWidth
                             actions: [playlistListAction, tweakAction, filterAction, sourcesAction, refreshAction]
                         }
                     }

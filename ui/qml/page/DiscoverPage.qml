@@ -649,7 +649,7 @@ W.CupertinoPage {
 
                     RowLayout {
                         anchors.left: parent.left
-                        width: _targetViewportWidth
+                        anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
@@ -715,8 +715,16 @@ W.CupertinoPage {
                     }
 
                     MD.ActionToolBar {
+                        id: discoverActionToolBar
+
+                        // Request the width needed by all icon delegates first.
+                        // RowLayout may still shrink this item when the master
+                        // pane is genuinely too narrow; only then does
+                        // ActionToolBar move the trailing actions to overflow.
                         Layout.fillWidth: true
-                        actions: [manageAction, tweakAction, filterAction, refreshAction]
+                        Layout.preferredWidth: maximumContentWidth
+                        actions: [tweakAction, filterAction, manageAction,
+                                  refreshAction]
                     }
                 }
 
