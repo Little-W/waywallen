@@ -12,6 +12,10 @@ W.CupertinoPage {
     // Keep the live toolbar flush with the structural title bar in desktop
     // mode; a transparent outer padding strip reads as a visible seam.
     topPadding: 0
+    // Meet the sidebar separator directly. The inherited desktop padding is
+    // still used on the other edges, but must not create a white channel to
+    // the left of the frosted toolbar.
+    leftPadding: 0
     rightPadding: 0
 
     property bool detailOpen: false

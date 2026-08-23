@@ -8,6 +8,12 @@ W.CupertinoPage {
     id: root
     title: qsTr("About")
     implicitWidth: aboutContent.implicitWidth + 32
+    // ColumnLayout is centered rather than assigned as contentItem, so Page
+    // cannot infer its height through the normal implicit-content path.  Tell
+    // PagePopup the complete surface height explicitly; otherwise only the
+    // app bar contributes and the body overflows below a header-sized card.
+    implicitHeight: (header && header.visible ? header.implicitHeight : 0)
+                    + aboutContent.implicitHeight + 48
     bottomPadding: 24
 
     ColumnLayout {

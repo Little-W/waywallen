@@ -1019,6 +1019,14 @@ W.CupertinoPage {
     // not a floating card.  Keep their junction fully covered in desktop
     // mode instead of exposing the page's transparent top padding.
     topPadding: 0
+    // The page already starts at Window's one-pixel structural separator.
+    // A second 12 px transparent inset exposed the opaque page background as
+    // a visible gap between the sidebar and this frosted toolbar.
+    leftPadding: 0
+    // Match DiscoverPage's full-width content geometry. Leaving the inherited
+    // 12 px desktop padding here exposed a white strip beside the toolbar and
+    // made both pages calculate their startup grids from different widths.
+    rightPadding: 0
 
     contentItem: RowLayout {
         spacing: 12
