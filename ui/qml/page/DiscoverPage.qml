@@ -26,6 +26,10 @@ W.CupertinoPage {
     readonly property var detailRow: detailStore.item
     property bool detailGridLayoutOpen: false
     property bool smoothDetailFocusPending: false
+    // Closing reverses the same centered master/detail trajectory used by
+    // WallpaperPage. Keep this independently of detailRow, which is released
+    // when the outgoing panel reaches zero opacity.
+    property bool restoreDetailFocusPending: false
     property bool detailCloseAnchorActive: false
     property real detailPanelProgress: detailOpen ? 1.0 : 0.0
     readonly property bool detailLayoutFocusActive: detailRow !== null
@@ -57,8 +61,20 @@ W.CupertinoPage {
     }
 
     onDetailOpenChanged: {
-        detailCloseAnchorActive = !detailOpen && m_grid
-                                  && m_grid.currentIndex >= 0;
+        if (detailOpen) {
+            restoreDetailFocusPending = false;
+            detailCloseAnchorActive = false;
+        } else if (detailRow !== null && m_grid
+                   && m_grid.currentIndex >= 0) {
+            // Keep the selected card visually anchored while the split view
+            // reverses, then return it to the centred grid row after the
+            // expanded topology has settled.
+            restoreDetailFocusPending = true;
+            smoothDetailFocusPending = true;
+            detailCloseAnchorActive = true;
+        } else {
+            detailCloseAnchorActive = false;
+        }
         if (m_grid)
             m_grid.beginDetailLayout(detailOpen);
         else
@@ -76,9 +92,21 @@ W.CupertinoPage {
     }
 
     function focusCurrentItem() {
-        if (!m_grid || m_grid.currentIndex < 0 || !root.detailLayoutFocusActive)
+        if (!m_grid || m_grid.currentIndex < 0
+                || (!root.detailLayoutFocusActive
+                    && !root.restoreDetailFocusPending))
             return;
         m_grid.forceLayout();
+        if (root.restoreDetailFocusPending) {
+            // Wait for the reverse panel and GridView reflow to publish the
+            // final delegate coordinates. Sampling during either animation
+            // would reproduce the close-time focus teleport.
+            if (root.detailPanelProgress > 0.001
+                    || detailPanelAnimation.running)
+                return;
+            discoverDetailRestoreFocusTimer.restart();
+            return;
+        }
         if (root.smoothDetailFocusPending && m_grid.currentItem) {
             root.smoothDetailFocusPending = false;
             const item = m_grid.currentItem;
@@ -935,7 +963,8 @@ W.CupertinoPage {
                             forceLayout();
                             startVisibleReflow();
                             discoverColumnReflowTimer.restart();
-                            if (root.detailLayoutFocusActive)
+                            if (root.detailLayoutFocusActive
+                                    || root.restoreDetailFocusPending)
                                 root.scheduleCurrentItemFocus();
                         }
 
@@ -952,15 +981,18 @@ W.CupertinoPage {
                             discoverInitialColumnSettleTimer.restart();
                         }
                         onWidthChanged: {
-                            if (root.detailLayoutFocusActive)
+                            if (root.detailLayoutFocusActive
+                                    || root.restoreDetailFocusPending)
                                 root.scheduleCurrentItemFocus();
                         }
                         onCellWidthChanged: {
-                            if (root.detailLayoutFocusActive)
+                            if (root.detailLayoutFocusActive
+                                    || root.restoreDetailFocusPending)
                                 root.scheduleCurrentItemFocus();
                         }
                         onCellHeightChanged: {
-                            if (root.detailLayoutFocusActive)
+                            if (root.detailLayoutFocusActive
+                                    || root.restoreDetailFocusPending)
                                 root.scheduleCurrentItemFocus();
                         }
 
@@ -1052,6 +1084,33 @@ W.CupertinoPage {
                         interval: 0
                         repeat: false
                         onTriggered: root.focusCurrentItem()
+                    }
+
+                    Timer {
+                        id: discoverDetailRestoreFocusTimer
+
+                        // Let GridView publish the final row positions before
+                        // deriving the native, refresh-synchronised wheel
+                        // target. This is the same close-time staging used by
+                        // WallpaperPage.
+                        interval: 24
+                        repeat: false
+                        onTriggered: {
+                            if (!root.restoreDetailFocusPending || !m_grid
+                                    || m_grid.currentIndex < 0
+                                    || !m_grid.currentItem)
+                                return;
+                            m_grid.forceLayout();
+                            const item = m_grid.currentItem;
+                            const usableCenter = (m_grid.topMargin
+                                                  + m_grid.height
+                                                  - m_grid.bottomMargin) / 2;
+                            const target = item.y + item.height / 2
+                                           - usableCenter;
+                            root.smoothDetailFocusPending = false;
+                            root.restoreDetailFocusPending = false;
+                            discoverDesktopWheel.scrollTo(target);
+                        }
                     }
 
                     ColumnLayout {
