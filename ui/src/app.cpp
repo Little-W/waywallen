@@ -5,16 +5,9 @@ module;
 #include <KWindowSystem>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
-#include <QElapsedTimer>
 #include <QRegion>
-#include <QScreen>
 #include <QTimer>
-#include <QVector>
 #include <rstd/macro.hpp>
-#include <algorithm>
-#include <cstdio>
-#include <memory>
-#include <numeric>
 
 module waywallen;
 import :app;
@@ -190,67 +183,6 @@ void App::init() {
     }
 
     rstd_assert(d->m_main_win, "main window must exist");
-
-    // Opt-in scene graph frame telemetry for release-performance validation.
-    // This remains entirely dormant in normal builds and lets the same binary
-    // report actual presentation cadence on the user's GPU/output instead of
-    // relying on a software-rendered test server.
-    if (qEnvironmentVariableIsSet("WAYWALLEN_FRAME_TIMING")) {
-        struct FrameTimingState {
-            QElapsedTimer clock;
-            qint64 last_frame_ns { 0 };
-            QVector<qint64> intervals_ns;
-        };
-        auto timing = std::make_shared<FrameTimingState>();
-        timing->clock.start();
-        const auto* screen = d->m_main_win->screen();
-        std::fprintf(stderr, "waywallen frame timing: enabled platform=%s screen=%s refresh_hz=%.3f\n",
-                     qPrintable(QGuiApplication::platformName()),
-                     screen ? qPrintable(screen->name()) : "unknown",
-                     screen ? screen->refreshRate() : 0.0);
-        std::fflush(stderr);
-        QObject::connect(d->m_main_win, &QQuickWindow::frameSwapped, d->m_main_win,
-                         [timing] {
-            const auto now = timing->clock.nsecsElapsed();
-            if (timing->last_frame_ns == 0) {
-                timing->last_frame_ns = now;
-                return;
-            }
-
-            const auto interval = now - timing->last_frame_ns;
-            timing->last_frame_ns = now;
-            // A long idle gap is not a slow frame.  Start a fresh sample run
-            // so the report represents an active animation or scroll.
-            if (interval > 50'000'000) {
-                timing->intervals_ns.clear();
-                return;
-            }
-            timing->intervals_ns.push_back(interval);
-            if (timing->intervals_ns.size() < 60)
-                return;
-
-            auto sorted = timing->intervals_ns;
-            std::sort(sorted.begin(), sorted.end());
-            const auto percentile = [&sorted](int percentage) {
-                const auto index = qMin(sorted.size() - 1,
-                                        (sorted.size() * percentage + 99) / 100 - 1);
-                return sorted.at(index);
-            };
-            const auto total = std::accumulate(sorted.cbegin(), sorted.cend(), qint64 { 0 });
-            const auto missed = std::count_if(sorted.cbegin(), sorted.cend(),
-                                              [](qint64 value) { return value > 6'150'000; });
-            std::fprintf(stderr,
-                         "waywallen frame timing: frames=%lld avg_ms=%.3f p95_ms=%.3f "
-                         "p99_ms=%.3f over_165hz=%lld\n",
-                         static_cast<long long>(sorted.size()),
-                         total / double(sorted.size()) / 1'000'000.0,
-                         percentile(95) / 1'000'000.0,
-                         percentile(99) / 1'000'000.0,
-                         static_cast<long long>(missed));
-            std::fflush(stderr);
-            timing->intervals_ns.clear();
-        }, Qt::DirectConnection);
-    }
 
     if (d->m_frosted_glass_available) {
         // QML draws the tint; KWin draws the actual blur. Apply once now and
