@@ -26,6 +26,10 @@ W.CupertinoPage {
     readonly property var detailRow: detailStore.item
     property bool detailGridLayoutOpen: false
     property bool smoothDetailFocusPending: false
+    // Closing reverses the same centered master/detail trajectory used by
+    // WallpaperPage. Keep this independently of detailRow, which is released
+    // when the outgoing panel reaches zero opacity.
+    property bool restoreDetailFocusPending: false
     property bool detailCloseAnchorActive: false
     property real detailPanelProgress: detailOpen ? 1.0 : 0.0
     readonly property bool detailLayoutFocusActive: detailRow !== null
@@ -57,8 +61,20 @@ W.CupertinoPage {
     }
 
     onDetailOpenChanged: {
-        detailCloseAnchorActive = !detailOpen && m_grid
-                                  && m_grid.currentIndex >= 0;
+        if (detailOpen) {
+            restoreDetailFocusPending = false;
+            detailCloseAnchorActive = false;
+        } else if (detailRow !== null && m_grid
+                   && m_grid.currentIndex >= 0) {
+            // Keep the selected card visually anchored while the split view
+            // reverses, then keep it within the nearest visible grid edge
+            // after the expanded topology has settled.
+            restoreDetailFocusPending = true;
+            smoothDetailFocusPending = true;
+            detailCloseAnchorActive = true;
+        } else {
+            detailCloseAnchorActive = false;
+        }
         if (m_grid)
             m_grid.beginDetailLayout(detailOpen);
         else
@@ -71,25 +87,37 @@ W.CupertinoPage {
             return;
         if (root.detailCloseAnchorActive)
             return;
-        if (!detailPanelAnimation.running)
-            discoverDetailFocusTimer.restart();
+        if (detailPanelAnimation.running) {
+            return;
+        }
+        discoverDetailFocusTimer.restart();
     }
 
     function focusCurrentItem() {
-        if (!m_grid || m_grid.currentIndex < 0 || !root.detailLayoutFocusActive)
+        if (!m_grid || m_grid.currentIndex < 0
+                || (!root.detailLayoutFocusActive
+                    && !root.restoreDetailFocusPending))
             return;
         m_grid.forceLayout();
-        if (root.smoothDetailFocusPending && m_grid.currentItem) {
-            root.smoothDetailFocusPending = false;
-            const item = m_grid.currentItem;
-            const usableCenter = (m_grid.topMargin + m_grid.height
-                                  - m_grid.bottomMargin) / 2;
-            discoverDesktopWheel.scrollTo(item.y + item.height / 2
-                                          - usableCenter);
+        if (root.restoreDetailFocusPending) {
+            if (root.detailPanelProgress > 0.001
+                    || detailPanelAnimation.running) {
+                return;
+            }
+            discoverDetailRestoreFocusTimer.restart();
             return;
         }
+        const smooth = root.smoothDetailFocusPending;
         root.smoothDetailFocusPending = false;
-        m_grid.positionViewAtIndex(m_grid.currentIndex, GridView.Center);
+        if (!m_grid.currentItem)
+            return;
+        const target = m_grid.nearestVisibleContentY(m_grid.currentItem, NaN);
+        if (Math.abs(target - m_grid.contentY) <= 0.5)
+            return;
+        if (smooth)
+            discoverDesktopWheel.scrollTo(target);
+        else
+            m_grid.contentY = target;
     }
 
     property string sourceId: ""
@@ -332,6 +360,7 @@ W.CupertinoPage {
         const detailWasOpen = root.detailOpen;
         m_grid.currentIndex = index;
         root.smoothDetailFocusPending = detailWasOpen;
+        m_grid.forceActiveFocus();
         detailStore.item = searchQuery.model.item(index);
         detailOpen = true;
         detailsQuery.sourceId = detailRow.sourceId;
@@ -752,11 +781,16 @@ W.CupertinoPage {
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        anchors.right: parent.right
                         // discoverGridViewport performs the animated clipping;
                         // keep GridView's own layout viewport at the final
                         // master/detail width throughout the transition.
+                        width: _targetViewportWidth
                         clip: false
+                        focus: true
+                        focusPolicy: Qt.StrongFocus
+                        keyNavigationEnabled: true
+                        keyNavigationWraps: true
+                        highlightRangeMode: GridView.NoHighlightRange
                         // Match the wallpaper library's native touchpad path.
                         // Qcm's touch-oriented synchronous drag turns the first
                         // pixel-delta sample into a jump.
@@ -889,19 +923,73 @@ W.CupertinoPage {
                             });
                         }
 
+                        // Keep the selected card on its nearest visible
+                        // horizontal line. These are intentionally identical
+                        // to WallpaperPage so both grids share one transition
+                        // model instead of merely similar easing values.
+                        function clampedContentY(value) {
+                            const minimum = originY - topMargin;
+                            const maximum = Math.max(
+                                minimum,
+                                originY + contentHeight + bottomMargin
+                                - height);
+                            return Math.max(minimum,
+                                            Math.min(maximum, value));
+                        }
+
+                        function cardSceneCenter(item) {
+                            if (!item)
+                                return NaN;
+                            const cardHeight = Math.min(item.itemHeight,
+                                                        item.height);
+                            return item.y + (item.height - cardHeight) / 2
+                                   - contentY + cardHeight / 2;
+                        }
+
+                        function nearestVisibleContentY(item,
+                                                        preferredSceneCenter) {
+                            if (!item)
+                                return contentY;
+                            const cardHeight = Math.min(item.itemHeight,
+                                                        item.height);
+                            const visibleTop = topMargin;
+                            const visibleBottom = Math.max(
+                                visibleTop, height - bottomMargin);
+                            const latestTop = Math.max(
+                                visibleTop, visibleBottom - cardHeight);
+                            const currentCenter = cardSceneCenter(item);
+                            const requestedCenter = Number.isFinite(
+                                preferredSceneCenter) ? preferredSceneCenter
+                                                      : currentCenter;
+                            const requestedTop = requestedCenter
+                                                 - cardHeight / 2;
+                            const targetSceneTop = Math.max(
+                                visibleTop,
+                                Math.min(latestTop, requestedTop));
+                            const cardContentTop = item.y
+                                + (item.height - cardHeight) / 2;
+                            return clampedContentY(cardContentTop
+                                                   - targetSceneTop);
+                        }
+
                         function beginDetailLayout(open) {
                             if (root.detailGridLayoutOpen === open)
                                 return;
 
                             discoverColumnSettleTimer.stop();
-                            discoverDetailContentYAnimation.stop();
                             viewportResizeActive = false;
                             if (!_initialLayoutReady) {
                                 root.detailGridLayoutOpen = open;
                                 _cols = _calculatedCols;
                                 return;
                             }
-                            const originalContentY = contentY;
+                            const anchoredClose = !open
+                                                  && root.detailCloseAnchorActive
+                                                  && currentIndex >= 0;
+                            const anchoredItem = currentIndex >= 0
+                                                 ? currentItem : null;
+                            const preferredSceneCenter = cardSceneCenter(
+                                anchoredItem);
                             columnReflowActive = false;
                             columnReflowActive = true;
                             prepareVisibleReflow();
@@ -910,24 +998,16 @@ W.CupertinoPage {
                             if (currentIndex >= 0) {
                                 discoverDesktopWheel.cancel();
                                 forceLayout();
-                                positionViewAtIndex(currentIndex,
-                                                    GridView.Center);
-                                const targetContentY = contentY;
-                                contentY = originalContentY;
+                                const targetContentY = nearestVisibleContentY(
+                                    currentItem, preferredSceneCenter);
+                                contentY = targetContentY;
+                                if (anchoredClose) {
+                                    root.restoreDetailFocusPending = false;
+                                }
                                 root.smoothDetailFocusPending = false;
-                                discoverDetailContentYAnimation.from =
-                                    originalContentY;
-                                discoverDetailContentYAnimation.to =
-                                    targetContentY;
                             }
                             forceLayout();
                             startVisibleReflow();
-                            if (currentIndex >= 0
-                                    && Math.abs(
-                                        discoverDetailContentYAnimation.to
-                                        - discoverDetailContentYAnimation.from)
-                                       > 0.01)
-                                discoverDetailContentYAnimation.restart();
                             discoverColumnReflowTimer.restart();
                         }
 
@@ -993,16 +1073,6 @@ W.CupertinoPage {
                         highlight: null
                     }
 
-                    NumberAnimation {
-                        id: discoverDetailContentYAnimation
-
-                        target: m_grid
-                        property: "contentY"
-                        duration: 220
-                        easing.type: root.detailOpen ? Easing.OutCubic
-                                                     : Easing.InCubic
-                    }
-
                     Timer {
                         id: discoverPreviewAnimationSettleTimer
 
@@ -1060,6 +1130,29 @@ W.CupertinoPage {
                         interval: 0
                         repeat: false
                         onTriggered: root.focusCurrentItem()
+                    }
+
+                    Timer {
+                        id: discoverDetailRestoreFocusTimer
+
+                        // Let GridView publish the final row positions before
+                        // deriving the native, refresh-synchronised wheel
+                        // target. This is the same close-time staging used by
+                        // WallpaperPage.
+                        interval: 24
+                        repeat: false
+                        onTriggered: {
+                            if (!root.restoreDetailFocusPending || !m_grid
+                                    || m_grid.currentIndex < 0
+                                    || !m_grid.currentItem)
+                                return;
+                            m_grid.forceLayout();
+                            const target = m_grid.nearestVisibleContentY(
+                                m_grid.currentItem, NaN);
+                            root.smoothDetailFocusPending = false;
+                            root.restoreDetailFocusPending = false;
+                            discoverDesktopWheel.scrollTo(target);
+                        }
                     }
 
                     ColumnLayout {
