@@ -18,6 +18,7 @@ find_package(
   COMPONENTS Quick
              QuickControls2
              DBus
+             Network
              Protobuf
              ProtobufQuick
              ProtobufWellKnownTypes
@@ -322,6 +323,7 @@ target_compile_definitions(waywallen-qml PRIVATE "${APP_INFO_MACROS}")
 target_link_libraries(waywallen-qml
   PUBLIC
     Qt6::DBus
+    Qt6::Network
     Qt6::Protobuf
     Qt6::ProtobufQuick
     Qt6::ProtobufWellKnownTypes
