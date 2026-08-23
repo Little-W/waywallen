@@ -142,7 +142,7 @@ impl DBusMenu {
         let app = self.app.clone();
         match id {
             ID_OPEN_UI => {
-                if !crate::spawn_ui(&app) {
+                if !crate::open_or_raise_ui(&app).await {
                     log::warn!("tray: open_ui failed");
                 }
             }
@@ -511,7 +511,7 @@ fn item_to_value(item: ItemStruct) -> OwnedValue {
 async fn dispatch_click(app: &Arc<DaemonContext>, id: i32) -> zbus::fdo::Result<()> {
     match id {
         ID_OPEN_UI => {
-            let _ = crate::spawn_ui(app);
+            let _ = crate::open_or_raise_ui(app).await;
         }
         ID_NEXT => {
             let _ = application::step(app, 1).await;

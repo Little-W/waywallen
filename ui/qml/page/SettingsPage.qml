@@ -246,6 +246,8 @@ MD.Page {
         m_pending.nextGlobal = null;
         m_pending.submittedGlobal = nextGlobal;
         W.Global.sidebarAutoExpand = true;
+        W.Global.singleUiEnabled = false;
+        W.App.setSingleUiEnabled(false);
         W.Global.networkCacheMaximumMiB = 1024;
         W.Global.setThemeMode("system");
         W.Global.accentColor = W.Global.defaultAccentColor;
@@ -519,6 +521,40 @@ MD.Page {
                         id: m_sidebar_auto_expand
                         checked: W.Global.sidebarAutoExpand
                         onToggled: W.Global.sidebarAutoExpand = checked
+                    }
+                }
+            }
+
+            SettingItem {
+                first: false
+                last: false
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        FieldLabel { text: qsTr("Single UI instance") }
+
+                        MD.Text {
+                            text: qsTr("When enabled, launching Waywallen again focuses the existing window.")
+                            typescale: MD.Token.typescale.body_small
+                            color: MD.Token.color.on_surface_variant
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    MD.Switch {
+                        id: m_single_ui
+                        checked: W.Global.singleUiEnabled
+                        onToggled: {
+                            W.Global.singleUiEnabled = checked;
+                            W.App.setSingleUiEnabled(checked);
+                        }
                     }
                 }
             }

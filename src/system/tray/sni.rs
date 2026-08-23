@@ -128,6 +128,12 @@ impl StatusNotifierItem {
         // Host renders the menu on its own from the DBusMenu object; nothing to do.
     }
 
+    /// Optional Wayland xdg-activation token from the StatusNotifier host
+    /// (`ProvideXdgActivationToken`). Unused on X11; empty is fine there.
+    async fn provide_xdg_activation_token(&self, token: String) {
+        *self.app.xdg_activation_token.lock().unwrap() = Some(token);
+    }
+
     /// Scroll wheel on the icon: ±1 through the playlist.
     async fn scroll(&self, delta: i32, orientation: String) {
         let _ = orientation;
@@ -157,7 +163,7 @@ impl StatusNotifierItem {
 }
 
 async fn open_ui(app: &Arc<DaemonContext>) -> anyhow::Result<()> {
-    if !crate::spawn_ui(app) {
+    if !crate::open_or_raise_ui(app).await {
         anyhow::bail!("waywallen-ui not available");
     }
     Ok(())

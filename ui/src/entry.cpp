@@ -45,8 +45,17 @@ int run(int argc, char** argv) {
         }
     }
 
+    QSettings  settings;
+    const bool single_ui = settings.value(QStringLiteral("singleUiEnabled"), false).toBool();
+    if (single_ui && ! claimOrRaiseUiInstance()) {
+        return 0;
+    }
+
     App app(ws_port, {});
     app.init();
+    if (single_ui) {
+        app.registerUiRaiseService();
+    }
 
     return gui_app.exec();
 }

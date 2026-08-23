@@ -44,6 +44,8 @@ public:
     App() = delete;
 
     void init();
+    void registerUiRaiseService();
+    void raiseMainWindow(const QString& xdgActivationToken = {});
 
     static auto instance() -> App*;
 
@@ -66,6 +68,7 @@ public:
     Q_SLOT void      setNetworkCacheMaximumSize(qint64 size);
     Q_SLOT void      clearNetworkCache();
     Q_INVOKABLE bool setUiLanguage(const QString& language);
+    Q_INVOKABLE void setSingleUiEnabled(bool enabled);
 
     Q_SIGNAL void errorOccurred(const QString& error);
     Q_SIGNAL void networkCacheSizeChanged();
@@ -80,4 +83,23 @@ private:
     QScopedPointer<AppPrivate> d_ptr;
     Q_DECLARE_PRIVATE(App);
 };
+
+/// Claim the UI well-known D-Bus name, or ask the existing instance to Raise.
+/// Returns false when this process should exit (secondary instance).
+export bool claimOrRaiseUiInstance();
+
+class UiRaiseBus : public QObject {
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.waywallen.waywallen.UI1")
+public:
+    explicit UiRaiseBus(App* app): QObject(app), m_app(app) {}
+
+    Q_SLOT void Raise(const QString& xdgActivationToken) {
+        m_app->raiseMainWindow(xdgActivationToken);
+    }
+
+private:
+    App* m_app;
+};
+
 } // namespace waywallen

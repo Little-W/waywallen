@@ -9,6 +9,7 @@ QtObject {
     id: root
 
     property bool sidebarAutoExpand: true
+    property bool singleUiEnabled: false
     property int networkCacheMaximumMiB: 1024
     property string themeMode: "system"
     readonly property color defaultAccentColor: "#6750A4"
@@ -90,6 +91,7 @@ QtObject {
 
     readonly property Settings _generalSettings: Settings {
         property alias sidebarAutoExpand: root.sidebarAutoExpand
+        property alias singleUiEnabled: root.singleUiEnabled
         property alias networkCacheMaximumMiB: root.networkCacheMaximumMiB
         property alias themeMode: root.themeMode
         property alias accentMode: root.accentMode
