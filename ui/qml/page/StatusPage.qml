@@ -96,6 +96,18 @@ MD.Page {
         id: settingsQuery
     }
 
+    MD.Action {
+        id: exitAction
+        icon.name: MD.Token.icon.exit_to_app
+        text: qsTr("Exit")
+        displayHint: MD.ToolBarLayout.KeepVisible
+        enabled: W.DaemonDBusClient.daemonAvailable
+        onTriggered: {
+            if (!W.DaemonDBusClient.quitDaemon())
+                W.Global.toastError(qsTr("Failed to stop daemon"));
+        }
+    }
+
     // Queries fan out only after the daemon is Ready (avoid hitting
     // a half-booted daemon at UI startup). `daemonReady` is edge-
     // triggered, so pages constructed AFTER ready also need the level
@@ -201,8 +213,21 @@ MD.Page {
                 contentItem: ColumnLayout {
                     spacing: 8
 
-                    SectionTitle {
-                        text: qsTr("Daemon")
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        SectionTitle {
+                            text: qsTr("Daemon")
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        MD.ActionToolBar {
+                            actions: [exitAction]
+                        }
                     }
 
                     RowLayout {

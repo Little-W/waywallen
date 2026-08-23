@@ -1340,6 +1340,22 @@ Related display: #%1</source>
         <translation>Раскрывать и сворачивать боковую панель вместе с размером окна.</translation>
     </message>
     <message>
+        <source>Single UI instance</source>
+        <translation>Один экземпляр интерфейса</translation>
+    </message>
+    <message>
+        <source>When enabled, launching Waywallen again focuses the existing window.</source>
+        <translation>При повторном запуске Waywallen фокусируется уже открытое окно.</translation>
+    </message>
+    <message>
+        <source>Quit UI with daemon</source>
+        <translation>Закрывать интерфейс вместе с демоном</translation>
+    </message>
+    <message>
+        <source>Close the UI when the daemon shuts down. Disable to keep it open for reconnection.</source>
+        <translation>Закрывать интерфейс при завершении демона. Отключите, чтобы оставить его открытым для повторного подключения.</translation>
+    </message>
+    <message>
         <source>Start at login</source>
         <translation>Запускать при входе в систему</translation>
     </message>
@@ -1496,6 +1512,14 @@ Related display: #%1</source>
     <message>
         <source>About</source>
         <translation>О программе</translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation>Выход</translation>
+    </message>
+    <message>
+        <source>Failed to stop daemon</source>
+        <translation>Не удалось остановить демон</translation>
     </message>
     <message>
         <source>Kill renderer?</source>

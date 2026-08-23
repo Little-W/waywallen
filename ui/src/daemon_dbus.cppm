@@ -34,6 +34,10 @@ public:
     Q_PROPERTY(QString daemonVersion READ daemonVersion NOTIFY statusChanged FINAL)
     /// Convenience derived from `status == Connected`.
     Q_PROPERTY(bool daemonAvailable READ daemonAvailable NOTIFY statusChanged FINAL)
+    Q_PROPERTY(bool quitOnDaemonShutdown READ quitOnDaemonShutdown WRITE setQuitOnDaemonShutdown
+                   NOTIFY quitOnDaemonShutdownChanged FINAL)
+    Q_PROPERTY(bool daemonShutdownExpected READ daemonShutdownExpected NOTIFY
+                   daemonShutdownExpectedChanged FINAL)
 
     explicit DaemonDBusClient(QObject* parent = nullptr);
     ~DaemonDBusClient() override;
@@ -45,6 +49,9 @@ public:
     quint16        wsPort() const { return m_ws_port; }
     const QString& daemonVersion() const { return m_daemon_version; }
     bool           daemonAvailable() const { return m_status == Connected; }
+    bool           quitOnDaemonShutdown() const { return m_quit_on_daemon_shutdown; }
+    bool           daemonShutdownExpected() const { return m_daemon_shutdown_expected; }
+    void           setQuitOnDaemonShutdown(bool enabled);
 
     /// Synchronous round-trip: read WsPort, then probe Version. Updates
     /// `status` to one of {Disconnected, VersionMissing, VersionMismatch,
@@ -52,6 +59,8 @@ public:
     Q_INVOKABLE quint16 refreshWsPort();
 
     Q_INVOKABLE bool refreshDisplays();
+
+    Q_INVOKABLE bool quitDaemon();
 
     /// Spawn the daemon as a detached child. Returns true on success.
     Q_INVOKABLE bool launchDaemon();
@@ -66,6 +75,8 @@ public:
 
     Q_SIGNAL void statusChanged();
     Q_SIGNAL void wsPortChanged(quint16 port);
+    Q_SIGNAL void quitOnDaemonShutdownChanged();
+    Q_SIGNAL void daemonShutdownExpectedChanged();
 
 private:
     Q_SLOT void on_service_registered(const QString& service);
@@ -78,6 +89,7 @@ private:
     void setup_subscriptions();
     void set_status(Status s);
     void set_ws_port(quint16 port);
+    void set_daemon_shutdown_expected(bool expected);
 
     /// `org.freedesktop.DBus.Properties.Get(kInterface, prop)`.
     QDBusMessage call_get(const QString& prop);
@@ -87,6 +99,8 @@ private:
     quint16              m_ws_port { 0 };
     QString              m_daemon_version;
     Status               m_status { Disconnected };
+    bool                 m_quit_on_daemon_shutdown { true };
+    bool                 m_daemon_shutdown_expected { false };
 };
 
 } // namespace waywallen

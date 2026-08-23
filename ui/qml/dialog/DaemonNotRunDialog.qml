@@ -17,7 +17,7 @@ MD.Popup {
     readonly property bool dbusConnected: W.DaemonDBusClient.status === W.DaemonDBusClient.Connected
     readonly property bool daemonStarting: dbusConnected && W.Notify.daemonPhase !== W.Notify.DaemonPhase.Ready
 
-    visible: !dbusConnected || daemonStarting
+    visible: !W.DaemonDBusClient.daemonShutdownExpected && (!dbusConnected || daemonStarting)
     closePolicy: T.Popup.NoAutoClose
     dim: true
     modal: true

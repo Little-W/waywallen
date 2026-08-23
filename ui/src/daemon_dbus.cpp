@@ -13,10 +13,11 @@ namespace waywallen
 namespace
 {
 
-constexpr const char* kBusName    = "org.waywallen.waywallen.Daemon";
-constexpr const char* kObjectPath = "/org/waywallen/waywallen/Daemon";
-constexpr const char* kInterface  = "org.waywallen.waywallen.Daemon1";
-constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
+constexpr const char* kBusName                 = "org.waywallen.waywallen.Daemon";
+constexpr const char* kObjectPath              = "/org/waywallen/waywallen/Daemon";
+constexpr const char* kInterface               = "org.waywallen.waywallen.Daemon1";
+constexpr const char* kPropsIface              = "org.freedesktop.DBus.Properties";
+constexpr const char* kQuitOnDaemonShutdownKey = "quitOnDaemonShutdown";
 
 DaemonDBusClient* g_instance { nullptr };
 
@@ -54,6 +55,9 @@ DaemonDBusClient::DaemonDBusClient(QObject* parent)
     if (! g_instance) {
         g_instance = this;
     }
+
+    m_quit_on_daemon_shutdown =
+        QSettings().value(QString::fromLatin1(kQuitOnDaemonShutdownKey), true).toBool();
 
     if (! m_bus.isConnected()) {
         qWarning("DaemonDBusClient: session bus not connected: %s",
@@ -201,7 +205,24 @@ bool DaemonDBusClient::refreshDisplays() {
     return false;
 }
 
+bool DaemonDBusClient::quitDaemon() {
+    if (! m_bus.isConnected() || m_status != Connected) return false;
+
+    set_daemon_shutdown_expected(true);
+    QDBusMessage msg   = QDBusMessage::createMethodCall(QString::fromLatin1(kBusName),
+                                                        QString::fromLatin1(kObjectPath),
+                                                        QString::fromLatin1(kInterface),
+                                                        QStringLiteral("Quit"));
+    QDBusMessage reply = m_bus.call(msg, QDBus::Block, 2000);
+    if (reply.type() == QDBusMessage::ReplyMessage) return true;
+
+    set_daemon_shutdown_expected(false);
+    qWarning("DaemonDBusClient: Quit failed: %s", qPrintable(reply.errorMessage()));
+    return false;
+}
+
 bool DaemonDBusClient::launchDaemon() {
+    set_daemon_shutdown_expected(false);
     qDebug("DaemonDBusClient: launching daemon (QProcess::startDetached)");
     bool ok = QProcess::startDetached(QStringLiteral("waywallen"), {});
     if (! ok) {
@@ -258,6 +279,7 @@ bool DaemonDBusClient::killProcess(quint32 pid) {
 void DaemonDBusClient::on_service_registered(const QString& service) {
     if (service != QString::fromLatin1(kBusName)) return;
     qDebug("DaemonDBusClient: daemon registered on bus");
+    set_daemon_shutdown_expected(false);
     refreshWsPort();
 }
 
@@ -276,7 +298,12 @@ void DaemonDBusClient::on_ready() {
 
 void DaemonDBusClient::on_shutting_down() {
     qDebug("DaemonDBusClient: ShuttingDown signal received");
-    QCoreApplication::quit();
+    set_daemon_shutdown_expected(true);
+    if (m_quit_on_daemon_shutdown) {
+        QCoreApplication::quit();
+        return;
+    }
+    set_status(Disconnected);
 }
 
 void DaemonDBusClient::on_properties_changed(const QString& iface, const QVariantMap& changed,
@@ -297,10 +324,23 @@ void DaemonDBusClient::set_status(Status s) {
     Q_EMIT statusChanged();
 }
 
+void DaemonDBusClient::setQuitOnDaemonShutdown(bool enabled) {
+    if (m_quit_on_daemon_shutdown == enabled) return;
+    m_quit_on_daemon_shutdown = enabled;
+    QSettings().setValue(QString::fromLatin1(kQuitOnDaemonShutdownKey), enabled);
+    Q_EMIT quitOnDaemonShutdownChanged();
+}
+
 void DaemonDBusClient::set_ws_port(quint16 port) {
     if (m_ws_port == port) return;
     m_ws_port = port;
     Q_EMIT wsPortChanged(m_ws_port);
+}
+
+void DaemonDBusClient::set_daemon_shutdown_expected(bool expected) {
+    if (m_daemon_shutdown_expected == expected) return;
+    m_daemon_shutdown_expected = expected;
+    Q_EMIT daemonShutdownExpectedChanged();
 }
 
 } // namespace waywallen

@@ -1334,6 +1334,22 @@ Related display: #%1</source>
         <translation>根据窗口大小展开或收起侧边栏。</translation>
     </message>
     <message>
+        <source>Single UI instance</source>
+        <translation>单 UI 实例</translation>
+    </message>
+    <message>
+        <source>When enabled, launching Waywallen again focuses the existing window.</source>
+        <translation>启用后，再次启动 Waywallen 会聚焦已有窗口。</translation>
+    </message>
+    <message>
+        <source>Quit UI with daemon</source>
+        <translation>随守护进程退出 UI</translation>
+    </message>
+    <message>
+        <source>Close the UI when the daemon shuts down. Disable to keep it open for reconnection.</source>
+        <translation>守护进程关闭时退出 UI。禁用后 UI 将保持打开并等待重新连接。</translation>
+    </message>
+    <message>
         <source>Start at login</source>
         <translation>登录时启动</translation>
     </message>
@@ -1490,6 +1506,14 @@ Related display: #%1</source>
     <message>
         <source>About</source>
         <translation>关于</translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation>退出</translation>
+    </message>
+    <message>
+        <source>Failed to stop daemon</source>
+        <translation>停止守护进程失败</translation>
     </message>
     <message>
         <source>Kill renderer?</source>

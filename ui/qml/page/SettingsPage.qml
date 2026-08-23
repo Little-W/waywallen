@@ -265,6 +265,7 @@ MD.Page {
         W.Global.sidebarAutoExpand = true;
         W.Global.singleUiEnabled = false;
         W.App.setSingleUiEnabled(false);
+        W.DaemonDBusClient.quitOnDaemonShutdown = true;
         W.Global.networkCacheMaximumMiB = 1024;
         W.Global.setThemeMode("system");
         W.Global.accentColor = W.Global.defaultAccentColor;
@@ -572,6 +573,36 @@ MD.Page {
                             W.Global.singleUiEnabled = checked;
                             W.App.setSingleUiEnabled(checked);
                         }
+                    }
+                }
+            }
+
+            SettingItem {
+                first: false
+                last: false
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        FieldLabel { text: qsTr("Quit UI with daemon") }
+
+                        MD.Text {
+                            text: qsTr("Close the UI when the daemon shuts down. Disable to keep it open for reconnection.")
+                            typescale: MD.Token.typescale.body_small
+                            color: MD.Token.color.on_surface_variant
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    MD.Switch {
+                        checked: W.DaemonDBusClient.quitOnDaemonShutdown
+                        onToggled: W.DaemonDBusClient.quitOnDaemonShutdown = checked
                     }
                 }
             }
