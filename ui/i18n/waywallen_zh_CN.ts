@@ -1294,10 +1294,6 @@ Related display: #%1</source>
         <translation>随机</translation>
     </message>
     <message>
-        <source>General</source>
-        <translation>常规</translation>
-    </message>
-    <message>
         <source>Theme</source>
         <translation>主题</translation>
     </message>
@@ -1376,6 +1372,14 @@ Related display: #%1</source>
     <message>
         <source>Auto replay</source>
         <translation>自动重播</translation>
+    </message>
+    <message>
+        <source>Appearance</source>
+        <translation>外观</translation>
+    </message>
+    <message>
+        <source>Behavior</source>
+        <translation>行为</translation>
     </message>
     <message>
         <source>Effect</source>

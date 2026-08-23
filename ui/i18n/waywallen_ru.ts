@@ -1300,10 +1300,6 @@ Related display: #%1</source>
         <translation>Случайно</translation>
     </message>
     <message>
-        <source>General</source>
-        <translation>Основные</translation>
-    </message>
-    <message>
         <source>Theme</source>
         <translation>Тема</translation>
     </message>
@@ -1382,6 +1378,14 @@ Related display: #%1</source>
     <message>
         <source>Auto replay</source>
         <translation>Автоповтор</translation>
+    </message>
+    <message>
+        <source>Appearance</source>
+        <translation>Внешний вид</translation>
+    </message>
+    <message>
+        <source>Behavior</source>
+        <translation>Поведение</translation>
     </message>
     <message>
         <source>Effect</source>

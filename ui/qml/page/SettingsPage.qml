@@ -391,7 +391,7 @@ MD.Page {
             width: m_flick.contentWidth
             spacing: 2
 
-            SettingHeader { text: qsTr("General") }
+            SettingHeader { text: qsTr("Appearance") }
 
             SettingItem {
                 first: true
@@ -480,7 +480,7 @@ MD.Page {
 
             SettingItem {
                 first: false
-                last: false
+                last: true
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -512,8 +512,51 @@ MD.Page {
                 }
             }
 
+            SettingHeader { text: qsTr("Auto replay") }
+
+            Repeater {
+                model: root.kAutoReplayRows
+                delegate: SettingItem {
+                    id: autoReplayItem
+                    required property int index
+                    required property var modelData
+
+                    first: autoReplayItem.index === 0
+                    last: autoReplayItem.index === root.kAutoReplayRows.length - 1
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        FieldLabel {
+                            Layout.fillWidth: true
+                            text: autoReplayItem.modelData.label
+                        }
+
+                        MD.ComboBox {
+                            id: autoReplayActionBox
+                            Layout.preferredWidth: 180
+                            mdState.size: MD.Enum.S
+                            model: root.kAutoActions.map(o => o.label)
+                            onActivated: idx => root._updateAutoReplayAction(
+                                autoReplayItem.modelData.key,
+                                root.kAutoActions[idx].value)
+                        }
+                        Binding {
+                            target: autoReplayActionBox
+                            property: "currentIndex"
+                            value: root._listIndex(
+                                root.kAutoActions,
+                                root._autoReplay()[autoReplayItem.modelData.key] ?? 0)
+                        }
+                    }
+                }
+            }
+
+            SettingHeader { text: qsTr("Behavior") }
+
             SettingItem {
-                first: false
+                first: true
                 last: false
 
                 RowLayout {
@@ -753,47 +796,6 @@ MD.Page {
                         target: m_plugin_update_notifications
                         property: "checked"
                         value: Boolean(root._currentGlobal()?.pluginUpdateNotifications ?? true)
-                    }
-                }
-            }
-
-            SettingHeader { text: qsTr("Auto replay") }
-
-            Repeater {
-                model: root.kAutoReplayRows
-                delegate: SettingItem {
-                    id: autoReplayItem
-                    required property int index
-                    required property var modelData
-
-                    first: autoReplayItem.index === 0
-                    last: autoReplayItem.index === root.kAutoReplayRows.length - 1
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        FieldLabel {
-                            Layout.fillWidth: true
-                            text: autoReplayItem.modelData.label
-                        }
-
-                        MD.ComboBox {
-                            id: autoReplayActionBox
-                            Layout.preferredWidth: 180
-                            mdState.size: MD.Enum.S
-                            model: root.kAutoActions.map(o => o.label)
-                            onActivated: idx => root._updateAutoReplayAction(
-                                autoReplayItem.modelData.key,
-                                root.kAutoActions[idx].value)
-                        }
-                        Binding {
-                            target: autoReplayActionBox
-                            property: "currentIndex"
-                            value: root._listIndex(
-                                root.kAutoActions,
-                                root._autoReplay()[autoReplayItem.modelData.key] ?? 0)
-                        }
                     }
                 }
             }
