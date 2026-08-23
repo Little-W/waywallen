@@ -139,7 +139,7 @@ Item {
             // shadow adds depth without introducing a per-card blur pass.
             MD.Elevation {
                 anchors.fill: m_thumb
-                z: -1
+                z: 1
                 elevation: root.current ? MD.Token.elevation.level2
                                         : MD.Token.elevation.level0
                 color: W.Global.cupertinoDark
@@ -147,7 +147,7 @@ Item {
                        : Qt.rgba(W.Global.effectiveAccentColor.r,
                                  W.Global.effectiveAccentColor.g,
                                  W.Global.effectiveAccentColor.b,
-                                 0.30)
+                                 0.82)
                 corners: MD.Util.corners(root._radius)
             }
 

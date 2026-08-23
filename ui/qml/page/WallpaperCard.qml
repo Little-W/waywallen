@@ -163,7 +163,11 @@ Item {
             // it without allocating a blurred texture for every card.
             MD.Elevation {
                 anchors.fill: m_thumb
-                z: -1
+                // RRectShadow only paints outside the opaque card silhouette.
+                // Keeping it above the thumbnail avoids its halo being hidden
+                // by the image's rounded layer; the precise outline remains
+                // the topmost selection element at z: 2.
+                z: 1
                 elevation: root.selectionHighlighted
                            ? MD.Token.elevation.level2
                            : MD.Token.elevation.level0
@@ -172,7 +176,7 @@ Item {
                        : Qt.rgba(W.Global.effectiveAccentColor.r,
                                  W.Global.effectiveAccentColor.g,
                                  W.Global.effectiveAccentColor.b,
-                                 0.30)
+                                 0.82)
                 corners: MD.Util.corners(root._radius)
             }
 
