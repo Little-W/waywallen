@@ -1,5 +1,6 @@
 module;
 
+#include <QtCore/QByteArray>
 #include <QtQml/QQmlExtensionPlugin>
 
 Q_IMPORT_QML_PLUGIN(waywallen_uiPlugin)
@@ -13,6 +14,15 @@ import waywallen;
 namespace waywallen
 {
 int run(int argc, char** argv) {
+    // Qt Quick normally selects a render loop per platform/driver.  Keep an
+    // explicit user or distro choice intact, but choose its dedicated render
+    // thread when nothing has selected one yet.  This lets the GUI thread
+    // advance input, QML bindings and network results while the scene graph
+    // records and submits the preceding frame.
+    if (! qEnvironmentVariableIsSet("QSG_RENDER_LOOP")
+        && qEnvironmentVariable("QT_QUICK_BACKEND") != "software")
+        qputenv("QSG_RENDER_LOOP", "threaded");
+
     auto request_init = ncrequest::global_init();
     if (request_init.is_err()) {
         auto error = rstd::cppstd::to_string(
