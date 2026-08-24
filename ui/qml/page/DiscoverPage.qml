@@ -569,6 +569,11 @@ MD.Page {
                         }
                     }
 
+                    W.DesktopWheelScroll {
+                        anchors.fill: parent
+                        flickable: m_grid
+                    }
+
                     ColumnLayout {
                         anchors.centerIn: parent
                         width: Math.min(parent.width - 48, 420)

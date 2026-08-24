@@ -18,4 +18,5 @@ export import :model.remote;
 export import :model.filter_rule;
 export import :model.user_property;
 export import :query;
+export import :scroll.animator;
 export import :thumb.service;

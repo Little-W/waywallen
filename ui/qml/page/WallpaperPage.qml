@@ -1141,6 +1141,11 @@ MD.Page {
                         }
                     }
 
+                    W.DesktopWheelScroll {
+                        anchors.fill: parent
+                        flickable: m_grid_view
+                    }
+
                     MD.Button {
                         id: cancelSelectionButton
                         anchors.left: parent.left
