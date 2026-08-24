@@ -515,7 +515,108 @@ MD.Page {
             m_grid_view.forceLayout();
     }
 
+    function prepareDetailClose() {
+        if (root.selectionActive || root.detailWallpaper === null
+                || m_grid_view.currentIndex < 0)
+            return;
+        root.restoreDetailFocusPending = true;
+        root.smoothDetailFocusPending = true;
+        root.detailCloseAnchorActive = true;
+    }
+
+    function synchronizeDetailGridLayout() {
+        if (m_grid_view)
+            m_grid_view.beginDetailLayout(root.detailPanelOpen);
+    }
+
+    function closeWallpaperDetail() {
+        root.prepareDetailClose();
+        root.selectedWallpaper = null;
+        // Signal delivery normally performs the same update.  Keep this
+        // explicit reconciliation for the detail panel's reverse transition:
+        // its grid target must never remain in the narrow detail topology
+        // after the panel itself has closed.
+        root.synchronizeDetailGridLayout();
+    }
+
     property var selectedWallpaper: null
+    // Retain the outgoing model while the split view closes; otherwise the
+    // detail surface would turn blank before its reverse transition finishes.
+    property var detailWallpaper: null
+    readonly property bool detailPanelOpen: root.selectedWallpaper !== null
+                                          && !root.selectionActive
+    property bool detailGridLayoutOpen: false
+    property real detailPanelProgress: root.detailPanelOpen ? 1.0 : 0.0
+    property bool smoothDetailFocusPending: false
+    property bool restoreDetailFocusPending: false
+    property bool detailCloseAnchorActive: false
+    readonly property bool detailLayoutFocusActive: root.detailWallpaper !== null
+                                                    && (root.detailPanelProgress > 0.001
+                                                        || detailPanelAnimation.running)
+    readonly property bool previewPageActive: T.StackView.status === T.StackView.Active
+
+    Behavior on detailPanelProgress {
+        NumberAnimation {
+            id: detailPanelAnimation
+            duration: 220
+            easing.type: root.detailPanelOpen ? Easing.OutCubic : Easing.InCubic
+            onRunningChanged: {
+                if (running) {
+                    m_grid_view.previewAnimationsSettled = false;
+                    previewAnimationSettleTimer.stop();
+                } else {
+                    previewAnimationSettleTimer.restart();
+                    root.synchronizeDetailGridLayout();
+                    if (root.detailPanelProgress <= 0.001
+                            && root.selectedWallpaper === null) {
+                        root.detailCloseAnchorActive = false;
+                        root.detailWallpaper = null;
+                    }
+                    root.scheduleCurrentWallpaperFocus();
+                }
+            }
+        }
+    }
+
+    onSelectedWallpaperChanged: {
+        if (selectedWallpaper !== null) {
+            detailWallpaper = selectedWallpaper;
+            restoreDetailFocusPending = false;
+            detailCloseAnchorActive = false;
+        } else {
+            // GridView retains currentIndex after the detail closes.  Keep
+            // that card on a nearest visible row while the columns expand.
+            root.prepareDetailClose();
+        }
+        root.synchronizeDetailGridLayout();
+        root.scheduleCurrentWallpaperFocus();
+    }
+
+    onDetailPanelOpenChanged: root.synchronizeDetailGridLayout()
+
+    function scheduleCurrentWallpaperFocus() {
+        if (m_grid_view.currentIndex < 0 || root.detailCloseAnchorActive)
+            return;
+        if (detailPanelAnimation.running)
+            return;
+        detailFocusTimer.restart();
+    }
+
+    function focusCurrentWallpaper() {
+        if (m_grid_view.currentIndex < 0
+                || (!root.detailLayoutFocusActive
+                    && !root.restoreDetailFocusPending))
+            return;
+        m_grid_view.forceLayout();
+        if (!m_grid_view.currentItem)
+            return;
+        const target = m_grid_view.nearestVisibleContentY(
+            m_grid_view.currentItem, NaN);
+        root.smoothDetailFocusPending = false;
+        root.restoreDetailFocusPending = false;
+        if (Math.abs(target - m_grid_view.contentY) > 0.5)
+            wallpaperDesktopWheel.scrollTo(target);
+    }
     property var currentWallpaperSelect: null
     property var wallpaperSelectSheet: null
     property var wallpaperTweakSheet: null
@@ -993,13 +1094,24 @@ MD.Page {
     showBackground: false
     padding: MD.MProp.size.isCompact ? 0 : 12
 
-    contentItem: RowLayout {
-        spacing: 12
+    contentItem: Item {
+        id: wallpaperSplitView
+
+        // Drive the master/detail geometry directly.  RowLayout performs
+        // several preferred-size negotiations for every fractional width,
+        // which makes a dense GridView visibly rewrap more than once.
+        readonly property real detailWidth: 280 * root.detailPanelProgress
+        readonly property real detailGap: 12 * root.detailPanelProgress
 
         // --- Left: wallpaper grid ---
         MD.Pane {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            id: wallpaperMasterPane
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Math.max(0, parent.width
+                            - wallpaperSplitView.detailWidth
+                            - wallpaperSplitView.detailGap)
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
             showBackground: true
@@ -1073,30 +1185,53 @@ MD.Page {
 
                 // Grid + centered empty-state overlay
                 Item {
+                    id: wallpaperGridArea
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    clip: true
 
                     MD.VerticalGridView {
                         id: m_grid_view
-                        anchors.fill: parent
-                        clip: true
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        // Use the destination width for the one grid reflow;
+                        // the master pane above clips the animated surface.
+                        width: _targetViewportWidth
+                        clip: false
                         focus: true
                         focusPolicy: Qt.StrongFocus
                         keyNavigationEnabled: true
                         keyNavigationWraps: true
                         currentIndex: -1
                         highlightRangeMode: GridView.NoHighlightRange
-                        cacheBuffer: 300
-                        displayMarginBeginning: 300
-                        displayMarginEnd: 300
+                        synchronousDrag: false
+                        pixelAligned: false
+                        reuseItems: !columnReflowActive
+                        cacheBuffer: columnReflowActive || detailPanelAnimation.running
+                                     ? Math.max(height + cellHeight,
+                                                Math.ceil(cellHeight * 1.25))
+                                     : Math.max(96, Math.ceil(cellHeight * 1.25))
+                        displayMarginBeginning: 0
+                        displayMarginEnd: 0
                         topMargin: 2
                         bottomMargin: root.selectionActionSheetActive ? root.selectionSheetReserve : 8
                         leftMargin: 8
                         rightMargin: 8
-                        visible: m_grid_view.count > 0
+                        visible: m_grid_view.count > 0 && _initialLayoutReady
 
-                        readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
-                        readonly property int _cols: Math.max(1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
+                        property bool previewAnimationsSettled: true
+                        property int _cols: 1
+                        property bool _initialLayoutReady: false
+                        property bool _columnLatchReady: false
+                        property bool columnReflowActive: false
+                        readonly property real _targetViewportWidth: Math.max(
+                            0, wallpaperSplitView.width
+                            - (root.detailGridLayoutOpen ? 292 : 0))
+                        readonly property real _availableWidth: Math.max(
+                            0, _targetViewportWidth - leftMargin - rightMargin)
+                        readonly property int _calculatedCols: Math.max(
+                            1, Math.floor(_availableWidth / wallpaperTweakState.itemSize))
                         readonly property real _stretchedItemWidth: _availableWidth / _cols
                         readonly property bool _fillCell: wallpaperTweakState.layoutMode === wallpaperTweakState.layoutFillCell
                         readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(wallpaperTweakState.itemSize, _stretchedItemWidth)
@@ -1104,10 +1239,144 @@ MD.Page {
                         cellWidth: _stretchedItemWidth
                         cellHeight: _fillCell ? _displayItemHeight : wallpaperTweakState.itemHeight
 
+                        onContentYChanged: {
+                            if (!moving && !flicking)
+                                previewBoundarySettleTimer.restart();
+                        }
+                        onMovementStarted: {
+                            wallpaperDesktopWheel.cancel();
+                            previewAnimationsSettled = false;
+                            previewAnimationSettleTimer.stop();
+                        }
+                        onMovementEnded: previewAnimationSettleTimer.restart()
+
+                        function forEachPreparedDelegate(callback) {
+                            const children = contentItem?.children || [];
+                            for (let i = 0; i < children.length; ++i) {
+                                const delegate = children[i];
+                                if (delegate && delegate.objectName === "wallpaperCard")
+                                    callback(delegate);
+                            }
+                        }
+
+                        function cardSceneCenter(item) {
+                            if (!item)
+                                return NaN;
+                            const cardHeight = Math.min(item.itemHeight,
+                                                        item.height);
+                            return item.y + (item.height - cardHeight) / 2
+                                   - contentY + cardHeight / 2;
+                        }
+
+                        function nearestVisibleContentY(item, preferredSceneCenter) {
+                            if (!item)
+                                return contentY;
+                            const cardHeight = Math.min(item.itemHeight, item.height);
+                            const visibleTop = topMargin;
+                            const visibleBottom = Math.max(visibleTop, height - bottomMargin);
+                            const latestTop = Math.max(visibleTop, visibleBottom - cardHeight);
+                            const currentCenter = item.y + (item.height - cardHeight) / 2
+                                                - contentY + cardHeight / 2;
+                            const requestedCenter = Number.isFinite(preferredSceneCenter)
+                                                  ? preferredSceneCenter : currentCenter;
+                            const sceneTop = Math.max(visibleTop, Math.min(
+                                latestTop, requestedCenter - cardHeight / 2));
+                            const target = item.y + (item.height - cardHeight) / 2 - sceneTop;
+                            const minimum = originY - topMargin;
+                            const maximum = Math.max(minimum,
+                                originY + contentHeight + bottomMargin - height);
+                            return Math.max(minimum, Math.min(maximum, target));
+                        }
+
+                        function reflowTo(columns) {
+                            if (columns === _cols)
+                                return;
+                            columnReflowActive = true;
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.prepareReflow();
+                            });
+                            _cols = columns;
+                            forceLayout();
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.startPreparedReflow();
+                            });
+                            columnReflowTimer.restart();
+                        }
+
+                        function beginDetailLayout(open) {
+                            if (root.detailGridLayoutOpen === open)
+                                return;
+                            columnSettleTimer.stop();
+                            if (!_initialLayoutReady) {
+                                root.detailGridLayoutOpen = open;
+                                _cols = _calculatedCols;
+                                return;
+                            }
+
+                            // Capture every visible card before changing the
+                            // grid topology. The reflow then starts from the
+                            // card's current scene position instead of the
+                            // destination cell, which keeps the detail pane
+                            // transition anchored just like the main branch.
+                            const anchoredClose = !open
+                                                  && root.detailCloseAnchorActive
+                                                  && currentIndex >= 0;
+                            const anchoredItem = currentIndex >= 0
+                                                 ? currentItem : null;
+                            const preferredSceneCenter = cardSceneCenter(
+                                anchoredItem);
+                            columnReflowActive = false;
+                            columnReflowActive = true;
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.prepareReflow();
+                            });
+                            root.detailGridLayoutOpen = open;
+                            _cols = _calculatedCols;
+                            if (currentIndex >= 0) {
+                                wallpaperDesktopWheel.cancel();
+                                forceLayout();
+                                const anchored = nearestVisibleContentY(
+                                    currentItem, preferredSceneCenter);
+                                contentY = anchored;
+                                if (anchoredClose) {
+                                    root.restoreDetailFocusPending = false;
+                                    root.smoothDetailFocusPending = false;
+                                }
+                            }
+                            forceLayout();
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.startPreparedReflow();
+                            });
+                            columnReflowTimer.restart();
+                        }
+
+                        function applySettledColumns() {
+                            reflowTo(_calculatedCols);
+                        }
+
+                        on_AvailableWidthChanged: {
+                            if (!_columnLatchReady) {
+                                _cols = _calculatedCols;
+                                initialColumnSettleTimer.restart();
+                            } else if (!detailPanelAnimation.running) {
+                                columnSettleTimer.restart();
+                            }
+                        }
+                        Component.onCompleted: {
+                            _cols = _calculatedCols;
+                            initialColumnSettleTimer.restart();
+                        }
+
                         model: wallpaperQuery.data
 
                         delegate: WallpaperCard {
                             selected: model.selected ?? false
+                            current: index === m_grid_view.currentIndex
+                            pageActive: root.previewPageActive
+                            animationSettled: m_grid_view.previewAnimationsSettled
+                            reflowTransitionActive: m_grid_view.columnReflowActive
+                            reflowReverse: root.detailCloseAnchorActive
+                                           && !root.detailPanelOpen
                             itemWidth: m_grid_view._displayItemWidth
                             itemHeight: m_grid_view._displayItemHeight
                             onClicked: modifiers => root.handleWallpaperClick(index, modifiers)
@@ -1142,8 +1411,72 @@ MD.Page {
                     }
 
                     W.DesktopWheelScroll {
+                        id: wallpaperDesktopWheel
                         anchors.fill: parent
                         flickable: m_grid_view
+                        onScrollingChanged: {
+                            if (scrolling) {
+                                m_grid_view.previewAnimationsSettled = false;
+                                previewAnimationSettleTimer.stop();
+                            } else {
+                                previewAnimationSettleTimer.restart();
+                            }
+                        }
+                    }
+
+                    Qml.Timer {
+                        id: previewAnimationSettleTimer
+                        interval: 140
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid_view.moving && !m_grid_view.flicking
+                                    && !wallpaperDesktopWheel.scrolling)
+                                m_grid_view.previewAnimationsSettled = true;
+                        }
+                    }
+
+                    Qml.Timer {
+                        id: previewBoundarySettleTimer
+                        interval: 180
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid_view.moving && !m_grid_view.flicking
+                                    && !wallpaperDesktopWheel.scrolling)
+                                m_grid_view.previewAnimationsSettled = true;
+                        }
+                    }
+
+                    Qml.Timer {
+                        id: initialColumnSettleTimer
+                        interval: 72
+                        repeat: false
+                        onTriggered: {
+                            m_grid_view._cols = m_grid_view._calculatedCols;
+                            m_grid_view.forceLayout();
+                            m_grid_view._columnLatchReady = true;
+                            m_grid_view._initialLayoutReady = true;
+                        }
+                    }
+
+                    Qml.Timer {
+                        id: columnSettleTimer
+                        interval: 72
+                        repeat: false
+                        onTriggered: m_grid_view.applySettledColumns()
+                    }
+
+                    Qml.Timer {
+                        id: columnReflowTimer
+                        interval: 220
+                        repeat: false
+                        onTriggered: m_grid_view.columnReflowActive = false
+                    }
+
+                    Qml.Timer {
+                        id: detailFocusTimer
+                        interval: 24
+                        repeat: false
+                        onTriggered: root.focusCurrentWallpaper()
                     }
 
                     MD.Button {
@@ -1225,20 +1558,43 @@ MD.Page {
         }
 
         // --- Right: wallpaper detail panel ---
-        MD.Pane {
-            Layout.preferredWidth: root.selectedWallpaper !== null && !root.selectionActive ? 280 : 0
-            Layout.fillHeight: true
-            Layout.maximumWidth: 280
-            visible: root.selectedWallpaper !== null && !root.selectionActive
-            radius: root.MD.MProp.page.backgroundRadius
-            padding: 0
-            showBackground: true
+        Item {
+            id: wallpaperDetailPanelContainer
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: wallpaperSplitView.detailWidth
+            visible: root.detailWallpaper !== null || root.detailPanelProgress > 0.001
+            clip: true
 
-            contentItem: WallpaperDetailPanel {
-                wallpaperId: root.selectedWallpaper?.id_proto ?? ""
-                fallbackWallpaper: root.selectedWallpaper
-                showApply: true
-                onBack: root.selectedWallpaper = null
+            MD.Pane {
+                width: 280
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                radius: root.MD.MProp.page.backgroundRadius
+                padding: 0
+                showBackground: true
+                // Present the detail surface early while the shared split
+                // geometry continues its stable 220 ms transition.  A 1:1
+                // opacity binding made the sidebar look delayed even though
+                // its width was already moving.
+                opacity: Math.min(1, root.detailPanelProgress * 1.35)
+                enabled: root.detailPanelProgress > 0.98
+
+                transform: Translate {
+                    // Retain the same small leading offset as main so the
+                    // detail surface and the preview compression read as one
+                    // transition rather than two independent animations.
+                    x: (1 - root.detailPanelProgress) * 18
+                }
+
+                contentItem: WallpaperDetailPanel {
+                    wallpaperId: root.detailWallpaper?.id_proto ?? ""
+                    fallbackWallpaper: root.detailWallpaper
+                    showApply: true
+                    onBack: root.closeWallpaperDetail()
+                }
             }
         }
     }

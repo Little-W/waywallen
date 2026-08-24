@@ -12,7 +12,74 @@ MD.Page {
     rightPadding: 0
 
     property bool detailOpen: false
-    readonly property var detailRow: detailOpen ? detailStore.item : null
+    // Keep the selected row alive until the reverse transition reaches zero.
+    readonly property var detailRow: detailStore.item
+    property bool detailGridLayoutOpen: false
+    property bool smoothDetailFocusPending: false
+    property bool restoreDetailFocusPending: false
+    property bool detailCloseAnchorActive: false
+    property real detailPanelProgress: detailOpen ? 1.0 : 0.0
+    readonly property bool detailLayoutFocusActive: detailRow !== null
+                                                    && (detailPanelProgress > 0.001
+                                                        || detailPanelAnimation.running)
+    readonly property bool previewPageActive: T.StackView.status === T.StackView.Active
+
+    Behavior on detailPanelProgress {
+        NumberAnimation {
+            id: detailPanelAnimation
+            duration: 220
+            easing.type: root.detailOpen ? Easing.OutCubic : Easing.InCubic
+            onRunningChanged: {
+                if (running) {
+                    m_grid.previewAnimationsSettled = false;
+                    discoverPreviewAnimationSettleTimer.stop();
+                } else {
+                    discoverPreviewAnimationSettleTimer.restart();
+                    if (root.detailPanelProgress <= 0.001 && !root.detailOpen) {
+                        root.detailCloseAnchorActive = false;
+                        detailsQuery.itemId = "";
+                        detailStore.item = null;
+                    }
+                    root.scheduleCurrentItemFocus();
+                }
+            }
+        }
+    }
+
+    onDetailOpenChanged: {
+        if (detailOpen) {
+            restoreDetailFocusPending = false;
+            detailCloseAnchorActive = false;
+        } else if (detailRow !== null && m_grid.currentIndex >= 0) {
+            restoreDetailFocusPending = true;
+            smoothDetailFocusPending = true;
+            detailCloseAnchorActive = true;
+        }
+        m_grid.beginDetailLayout(detailOpen);
+        root.scheduleCurrentItemFocus();
+    }
+
+    function scheduleCurrentItemFocus() {
+        if (m_grid.currentIndex < 0 || root.detailCloseAnchorActive
+                || detailPanelAnimation.running)
+            return;
+        discoverDetailFocusTimer.restart();
+    }
+
+    function focusCurrentItem() {
+        if (m_grid.currentIndex < 0
+                || (!root.detailLayoutFocusActive
+                    && !root.restoreDetailFocusPending))
+            return;
+        m_grid.forceLayout();
+        if (!m_grid.currentItem)
+            return;
+        const target = m_grid.nearestVisibleContentY(m_grid.currentItem, NaN);
+        root.smoothDetailFocusPending = false;
+        root.restoreDetailFocusPending = false;
+        if (Math.abs(target - m_grid.contentY) > 0.5)
+            discoverDesktopWheel.scrollTo(target);
+    }
 
     property string sourceId: ""
     property var sortOptions: []
@@ -152,6 +219,7 @@ MD.Page {
         if (sourceChanged || !canBrowse) {
             detailOpen = false;
             detailsQuery.itemId = "";
+            detailStore.item = null;
             m_grid.currentIndex = -1;
         }
     }
@@ -174,8 +242,6 @@ MD.Page {
 
     function closeDetail() {
         detailOpen = false;
-        detailsQuery.itemId = "";
-        m_grid.currentIndex = -1;
     }
 
     function openInfo() {
@@ -422,12 +488,20 @@ MD.Page {
             reloadAll();
     }
 
-    contentItem: RowLayout {
-        spacing: 12
+    contentItem: Item {
+        id: discoverSplitView
+
+        readonly property real detailWidth: 280 * root.detailPanelProgress
+        readonly property real detailGap: 12 * root.detailPanelProgress
 
         MD.Pane {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            id: discoverMasterPane
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: Math.max(0, parent.width
+                            - discoverSplitView.detailWidth
+                            - discoverSplitView.detailGap)
             radius: root.MD.MProp.page.backgroundRadius
             padding: 0
             showBackground: true
@@ -515,24 +589,46 @@ MD.Page {
                 }
 
                 Item {
+                    id: discoverGridArea
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    clip: true
 
                     MD.VerticalGridView {
                         id: m_grid
-                        anchors.fill: parent
-                        clip: true
-                        cacheBuffer: 300
-                        displayMarginBeginning: 300
-                        displayMarginEnd: 300
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: _targetViewportWidth
+                        clip: false
+                        synchronousDrag: false
+                        pixelAligned: false
+                        reuseItems: !columnReflowActive
+                        cacheBuffer: columnReflowActive || detailPanelAnimation.running
+                                     ? Math.max(height + cellHeight,
+                                                Math.ceil(cellHeight * 1.25))
+                                     : Math.max(96, Math.ceil(cellHeight * 1.25))
+                        displayMarginBeginning: 0
+                        displayMarginEnd: 0
                         currentIndex: -1
                         topMargin: 2
                         bottomMargin: 8
                         leftMargin: 8
                         rightMargin: 8
+                        visible: m_grid.count > 0 && _initialLayoutReady
 
-                        readonly property real _availableWidth: Math.max(0, width - leftMargin - rightMargin)
-                        readonly property int _cols: Math.max(1, Math.floor(_availableWidth / root.discoverTweakState.itemSize))
+                        property bool previewAnimationsSettled: true
+                        property int _cols: 1
+                        property bool _initialLayoutReady: false
+                        property bool _columnLatchReady: false
+                        property bool columnReflowActive: false
+                        readonly property real _targetViewportWidth: Math.max(
+                            0, discoverSplitView.width
+                            - (root.detailGridLayoutOpen ? 292 : 0))
+                        readonly property real _availableWidth: Math.max(
+                            0, _targetViewportWidth - leftMargin - rightMargin)
+                        readonly property int _calculatedCols: Math.max(
+                            1, Math.floor(_availableWidth / root.discoverTweakState.itemSize))
                         readonly property real _stretchedItemWidth: _availableWidth / _cols
                         readonly property bool _fillCell: root.discoverTweakState.layoutMode === root.discoverTweakState.layoutFillCell
                         readonly property real _displayItemWidth: _fillCell ? _stretchedItemWidth : Math.min(root.discoverTweakState.itemSize, _stretchedItemWidth)
@@ -540,10 +636,98 @@ MD.Page {
                         cellWidth: _stretchedItemWidth
                         cellHeight: _fillCell ? _displayItemHeight : root.discoverTweakState.itemHeight
 
+                        onContentYChanged: {
+                            if (!moving && !flicking)
+                                discoverBoundarySettleTimer.restart();
+                        }
+                        onMovementStarted: {
+                            discoverDesktopWheel.cancel();
+                            previewAnimationsSettled = false;
+                            discoverPreviewAnimationSettleTimer.stop();
+                        }
+                        onMovementEnded: discoverPreviewAnimationSettleTimer.restart()
+
+                        function forEachPreparedDelegate(callback) {
+                            const children = contentItem?.children || [];
+                            for (let i = 0; i < children.length; ++i) {
+                                const delegate = children[i];
+                                if (delegate && delegate.objectName === "discoverWallpaperCard")
+                                    callback(delegate);
+                            }
+                        }
+
+                        function nearestVisibleContentY(item, preferredSceneCenter) {
+                            if (!item)
+                                return contentY;
+                            const cardHeight = Math.min(item.itemHeight, item.height);
+                            const visibleTop = topMargin;
+                            const visibleBottom = Math.max(visibleTop, height - bottomMargin);
+                            const latestTop = Math.max(visibleTop, visibleBottom - cardHeight);
+                            const currentCenter = item.y + (item.height - cardHeight) / 2
+                                                - contentY + cardHeight / 2;
+                            const requestedCenter = Number.isFinite(preferredSceneCenter)
+                                                  ? preferredSceneCenter : currentCenter;
+                            const sceneTop = Math.max(visibleTop, Math.min(
+                                latestTop, requestedCenter - cardHeight / 2));
+                            const target = item.y + (item.height - cardHeight) / 2 - sceneTop;
+                            const minimum = originY - topMargin;
+                            const maximum = Math.max(minimum,
+                                originY + contentHeight + bottomMargin - height);
+                            return Math.max(minimum, Math.min(maximum, target));
+                        }
+
+                        function reflowTo(columns) {
+                            if (columns === _cols)
+                                return;
+                            columnReflowActive = true;
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.prepareReflow();
+                            });
+                            _cols = columns;
+                            forceLayout();
+                            forEachPreparedDelegate(function (delegate) {
+                                delegate.startPreparedReflow();
+                            });
+                            discoverColumnReflowTimer.restart();
+                        }
+
+                        function beginDetailLayout(open) {
+                            discoverColumnSettleTimer.stop();
+                            root.detailGridLayoutOpen = open;
+                            if (!_initialLayoutReady) {
+                                _cols = _calculatedCols;
+                                return;
+                            }
+                            reflowTo(_calculatedCols);
+                        }
+
+                        function applySettledColumns() {
+                            reflowTo(_calculatedCols);
+                        }
+
+                        on_AvailableWidthChanged: {
+                            if (!_columnLatchReady) {
+                                _cols = _calculatedCols;
+                                discoverInitialColumnSettleTimer.restart();
+                            } else if (!detailPanelAnimation.running) {
+                                discoverColumnSettleTimer.restart();
+                            }
+                        }
+                        Component.onCompleted: {
+                            _cols = _calculatedCols;
+                            discoverInitialColumnSettleTimer.restart();
+                        }
+
                         model: searchQuery.model
 
                         delegate: RemoteCard {
                             remoteCapability: root.sourceCapability(root.sourceId)
+                            current: index === m_grid.currentIndex
+                            pageActive: root.previewPageActive
+                            animationSettled: m_grid.previewAnimationsSettled
+                            reflowTransitionActive: m_grid.columnReflowActive
+                            reflowReverse: root.detailCloseAnchorActive
+                                           && !root.detailOpen
                             itemWidth: m_grid._displayItemWidth
                             itemHeight: m_grid._displayItemHeight
                             onClicked: {
@@ -570,8 +754,72 @@ MD.Page {
                     }
 
                     W.DesktopWheelScroll {
+                        id: discoverDesktopWheel
                         anchors.fill: parent
                         flickable: m_grid
+                        onScrollingChanged: {
+                            if (scrolling) {
+                                m_grid.previewAnimationsSettled = false;
+                                discoverPreviewAnimationSettleTimer.stop();
+                            } else {
+                                discoverPreviewAnimationSettleTimer.restart();
+                            }
+                        }
+                    }
+
+                    Timer {
+                        id: discoverPreviewAnimationSettleTimer
+                        interval: 140
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid.moving && !m_grid.flicking
+                                    && !discoverDesktopWheel.scrolling)
+                                m_grid.previewAnimationsSettled = true;
+                        }
+                    }
+
+                    Timer {
+                        id: discoverBoundarySettleTimer
+                        interval: 180
+                        repeat: false
+                        onTriggered: {
+                            if (!m_grid.moving && !m_grid.flicking
+                                    && !discoverDesktopWheel.scrolling)
+                                m_grid.previewAnimationsSettled = true;
+                        }
+                    }
+
+                    Timer {
+                        id: discoverInitialColumnSettleTimer
+                        interval: 72
+                        repeat: false
+                        onTriggered: {
+                            m_grid._cols = m_grid._calculatedCols;
+                            m_grid.forceLayout();
+                            m_grid._columnLatchReady = true;
+                            m_grid._initialLayoutReady = true;
+                        }
+                    }
+
+                    Timer {
+                        id: discoverColumnSettleTimer
+                        interval: 72
+                        repeat: false
+                        onTriggered: m_grid.applySettledColumns()
+                    }
+
+                    Timer {
+                        id: discoverColumnReflowTimer
+                        interval: 220
+                        repeat: false
+                        onTriggered: m_grid.columnReflowActive = false
+                    }
+
+                    Timer {
+                        id: discoverDetailFocusTimer
+                        interval: 24
+                        repeat: false
+                        onTriggered: root.focusCurrentItem()
                     }
 
                     ColumnLayout {
@@ -653,36 +901,49 @@ MD.Page {
             }
         }
 
-        MD.Pane {
-            Layout.preferredWidth: root.detailRow !== null ? 280 : 0
-            Layout.maximumWidth: 280
-            Layout.fillHeight: true
-            visible: root.detailRow !== null
-            radius: root.MD.MProp.page.backgroundRadius
-            padding: 0
-            showBackground: true
+        Item {
+            id: discoverDetailPanelContainer
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: discoverSplitView.detailWidth
+            visible: root.detailRow !== null || root.detailPanelProgress > 0.001
+            clip: true
 
-            contentItem: RemoteDetailPanel {
-                item: root.detailRow
-                details: detailsQuery
-                remoteCapability: root.detailRow ? root.sourceCapability(root.detailRow.sourceId) : 0
-                remoteHint: root.detailRow ? root.sourceRemoteHint(root.detailRow.sourceId) : ""
-                downloadState: Number(root.detailRow?.acquisitionState ?? 0)
-                subscriptionState: Number(root.detailRow?.acquisitionState ?? 0)
+            MD.Pane {
+                width: 280
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                radius: root.MD.MProp.page.backgroundRadius
+                padding: 0
+                showBackground: true
+                opacity: Math.min(1, root.detailPanelProgress * 1.35)
+                enabled: root.detailPanelProgress > 0.98
+                transform: Translate { x: (1 - root.detailPanelProgress) * 18 }
 
-                onBack: root.closeDetail()
-                onShowInfo: root.openInfo()
-                onDownloadRequested: {
-                    if (!root.detailRow)
-                        return;
-                    dlQuery.start(root.detailRow.sourceId, root.detailRow.itemId);
+                contentItem: RemoteDetailPanel {
+                    item: root.detailRow
+                    details: detailsQuery
+                    remoteCapability: root.detailRow ? root.sourceCapability(root.detailRow.sourceId) : 0
+                    remoteHint: root.detailRow ? root.sourceRemoteHint(root.detailRow.sourceId) : ""
+                    downloadState: Number(root.detailRow?.acquisitionState ?? 0)
+                    subscriptionState: Number(root.detailRow?.acquisitionState ?? 0)
+
+                    onBack: root.closeDetail()
+                    onShowInfo: root.openInfo()
+                    onDownloadRequested: {
+                        if (!root.detailRow)
+                            return;
+                        dlQuery.start(root.detailRow.sourceId, root.detailRow.itemId);
+                    }
+                    onRemoveRequested: {
+                        if (root.detailRow)
+                            dlQuery.remove(root.detailRow.sourceId, root.detailRow.itemId);
+                    }
+                    onSubscriptionRefreshRequested: root.refreshDetailSubscription()
+                    onSubscriptionChangeRequested: subscribed => root.setDetailSubscription(subscribed)
                 }
-                onRemoveRequested: {
-                    if (root.detailRow)
-                        dlQuery.remove(root.detailRow.sourceId, root.detailRow.itemId);
-                }
-                onSubscriptionRefreshRequested: root.refreshDetailSubscription()
-                onSubscriptionChangeRequested: subscribed => root.setDetailSubscription(subscribed)
             }
         }
     }
