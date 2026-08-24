@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Qcm.Material as MD
+import waywallen.ui as W
 
 Item {
     id: root
@@ -23,6 +24,13 @@ Item {
     readonly property int _radius: MD.Token.shape.corner.extra_small
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    readonly property bool gridMoving: GridView.view
+                                      ? (GridView.view.moving || GridView.view.flicking)
+                                      : false
+    readonly property bool animationEnabled: !root.gridMoving && GridView.view
+                                            ? root.y + root.height > GridView.view.contentY
+                                              && root.y < GridView.view.contentY + GridView.view.height
+                                            : false
 
     Item {
         id: m_card
@@ -36,23 +44,21 @@ Item {
             anchors.margins: 6
             clip: true
 
-            AnimatedImage {
+            W.ThumbnailImage {
                 id: m_thumb
                 anchors.fill: parent
                 source: root.previewUrl
+                resource: ""
+                wpType: ""
                 fillMode: Image.PreserveAspectCrop
-                horizontalAlignment: Image.AlignHCenter
-                verticalAlignment: Image.AlignVCenter
-                smooth: true
-                cache: true
-                playing: true
-                asynchronous: true
-                onStatusChanged: if (status === AnimatedImage.Ready) playing = true
-                layer.enabled: true
-                layer.effect: MD.RoundClip {
-                    corners: MD.Util.corners(root._radius)
-                    size: Qt.vector2d(m_thumb.width, m_thumb.height)
-                }
+                radius: root._radius
+                maximumSourceSize: 512
+                motionActive: root.gridMoving
+                animationEnabled: root.animationEnabled
+                // Remote GIF/WebP previews keep their original decoder when
+                // settled and are replayed after finite source loops.
+                staticPosterEnabled: true
+                cacheAnimatedFrames: true
             }
 
             Rectangle {

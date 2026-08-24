@@ -27,6 +27,13 @@ Item {
     readonly property real _selectedInset: root._selectedRadius / 2
     readonly property real cardWidth: Math.min(root.itemWidth, root.width)
     readonly property real cardHeight: Math.min(root.itemHeight, root.height)
+    readonly property bool gridMoving: GridView.view
+                                      ? (GridView.view.moving || GridView.view.flicking)
+                                      : false
+    readonly property bool animationEnabled: !root.gridMoving && GridView.view
+                                            ? root.y + root.height > GridView.view.contentY
+                                              && root.y < GridView.view.contentY + GridView.view.height
+                                            : false
 
     Rectangle {
         anchors.fill: parent
@@ -53,6 +60,14 @@ Item {
                 wpType  : root.wallpaper?.wpType ?? ""
                 fillMode: Image.PreserveAspectCrop
                 radius: root._radius
+                // Keep card textures bounded and reuse an asynchronously
+                // generated poster while the grid is translating.
+                maximumSourceSize: 512
+                thumbnailCacheEdge: 512
+                motionActive: root.gridMoving
+                animationEnabled: root.animationEnabled
+                staticPosterEnabled: true
+                cacheAnimatedFrames: false
             }
 
             // Scrim aligns to the image control's bounds; spans the
